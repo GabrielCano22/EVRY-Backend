@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_SAY
+}
+
+enum Goal {
+  STRENGTH
+  HYPERTROPHY
+  ENDURANCE
+  FAT_LOSS
+  GENERAL_FITNESS
+  MOBILITY
+}
+
+enum MuscleGroup {
+  CHEST
+  BACK
+  SHOULDERS
+  BICEPS
+  TRICEPS
+  FOREARMS
+  CORE
+  QUADS
+  HAMSTRINGS
+  GLUTES
+  CALVES
+  FULL_BODY
+  CARDIO
+}
+
+enum Equipment {
+  BARBELL
+  DUMBBELL
+  MACHINE
+  CABLE
+  BODYWEIGHT
+  KETTLEBELL
+  BAND
+  OTHER
+}
+
+enum CyclePhase {
+  MENSTRUAL
+  FOLLICULAR
+  OVULATION
+  LUTEAL
+}
+
+enum Flow {
+  NONE
+  SPOTTING
+  LIGHT
+  MEDIUM
+  HEAVY
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  biologicalSex Sex       @default(PREFER_NOT_SAY)
+  birthDate     DateTime?
+  goals         Goal[]    @default([])
+  trackCycle    Boolean   @default(false)
+  avgCycleLen   Int       @default(28)
+  avgPeriodLen  Int       @default(5)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workouts        Workout[]
+  cycleEntries    CycleEntry[]
+  exerciseStats   ExerciseStat[]
+  customExercises Exercise[]     @relation("CustomExercises")
+  refreshTokens   RefreshToken[]
+  readiness       Readiness[]
+  routines        Routine[]
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Exercise {
+  id               String      @id @default(cuid())
+  sourceId         String?     @unique
+  name             String
+  muscleGroup      MuscleGroup
+  equipment        Equipment   @default(BODYWEIGHT)
+  category         String?
+  bodyPart         String?
+  target           String?
+  secondaryMuscles String[]    @default([])
+  equipmentLabel   String?
+  isCustom         Boolean     @default(false)
+  ownerId          String?
+  owner            User?       @relation("CustomExercises", fields: [ownerId], references: [id], onDelete: SetNull)
+  isCompound       Boolean     @default(false)
+  tags             String[]    @default([]) // joint_friendly, pregnancy_safe, accessibility_seated, etc.
+  description      String?
+  instructions     Json?
+  instructionSteps Json?
+  mediaId          String?
+  imagePath        String?
+  gifPath          String?
+  attribution      String?
+  createdAt        DateTime    @default(now())
+
+  sets         WorkoutSet[]
+  stats        ExerciseStat[]
+  routineItems RoutineExercise[]
+
+  @@index([ownerId])
+  @@index([muscleGroup])
+  @@index([category])
+  @@index([bodyPart])
+  @@index([equipmentLabel])
+}
+
+model Workout {
+  id         String      @id @default(cuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  startedAt  DateTime    @default(now())
+  endedAt    DateTime?
+  cyclePhase CyclePhase?
+  notes      String?
+  routineId  String?
+  routine    Routine?    @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  createdAt  DateTime    @default(now())
+
+  sets WorkoutSet[]
+
+  @@index([userId, startedAt(sort: Desc)])
+}
+
+model Routine {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  // 0=Lunes, 1=Martes, ..., 6=Domingo. null = sin día asignado
+  dayOfWeek Int?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exercises RoutineExercise[]
+  workouts  Workout[]
+
+  @@index([userId])
+  @@index([userId, dayOfWeek])
+}
+
+model RoutineExercise {
+  id             String   @id @default(cuid())
+  routineId      String
+  routine        Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exerciseId     String
+  exercise       Exercise @relation(fields: [exerciseId], references: [id])
+  order          Int
+  targetSets     Int      @default(3)
+  targetReps     Int?
+  targetWeightKg Float?
+  notes          String?
+
+  @@index([routineId])
+}
+
+model WorkoutSet {
+  id          String   @id @default(cuid())
+  workoutId   String
+  workout     Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exerciseId  String
+  exercise    Exercise @relation(fields: [exerciseId], references: [id])
+  order       Int
+  weightKg    Float?
+  reps        Int?
+  durationS   Int?
+  rpe         Int?
+  isWarmup    Boolean  @default(false)
+  completedAt DateTime @default(now())
+
+  @@index([workoutId])
+  @@index([exerciseId])
+}
+
+model CycleEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date          DateTime @db.Date
+  flow          Flow     @default(NONE)
+  symptoms      String[] @default([])
+  energy        Int?
+  mood          Int?
+  notes         String?
+  isPeriodStart Boolean  @default(false)
+
+  @@unique([userId, date])
+  @@index([userId, date(sort: Desc)])
+}
+
+model ExerciseStat {
+  userId        String
+  exerciseId    String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise      Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  estimated1RM  Float
+  bestWeight    Float
+  bestReps      Int
+  lastSetAt     DateTime
+  trendSlope    Float    @default(0)
+  sessionsCount Int      @default(0)
+
+  @@id([userId, exerciseId])
+}
+
+model Readiness {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date       DateTime @default(now())
+  sleepHrs   Float?
+  stress     Int? // 1-5
+  soreness   Int? // 1-5
+  motivation Int? // 1-5
+  score      Float // computed 0-100
+
+  @@index([userId, date(sort: Desc)])
+}
