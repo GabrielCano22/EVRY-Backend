@@ -45,6 +45,7 @@ sirven desde este backend en `/media/exercises/images/*` y
 ```bash
 npm run exercises:verify
 npm run exercises:import
+npm run exercises:check-import
 ```
 
 Configura `MEDIA_BASE_URL` con el origen público del backend cuando la API y el
