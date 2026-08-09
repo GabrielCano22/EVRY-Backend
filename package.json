@@ -15,6 +15,7 @@
     "seed": "ts-node prisma/seed.ts",
     "exercises:verify": "ts-node scripts/verify-exercise-assets.ts",
     "exercises:import": "ts-node prisma/import-exercises.ts",
+    "exercises:check-import": "ts-node scripts/verify-exercise-import.ts",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "test": "jest"
   },
