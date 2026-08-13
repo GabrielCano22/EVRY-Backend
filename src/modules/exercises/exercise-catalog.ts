@@ -1,4 +1,5 @@
 import { Equipment, MuscleGroup, Prisma } from '@prisma/client';
+import { traducirNombreEjercicio } from './exercise-localization';
 
 export type LocalizedText = Record<string, string>;
 export type LocalizedSteps = Record<string, string[]>;
@@ -77,7 +78,7 @@ export function toExerciseCreateInput(record: DatasetExercise): Prisma.ExerciseC
   const englishInstructions = record.instructions?.en ?? '';
   return {
     sourceId: record.id,
-    name: record.name,
+    name: traducirNombreEjercicio(record.name),
     muscleGroup: mapBodyPartToMuscleGroup(record.body_part, record.target),
     equipment: mapEquipment(record.equipment),
     category: record.category,

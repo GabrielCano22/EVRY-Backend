@@ -104,11 +104,11 @@ export class CycleService {
       case 'MENSTRUAL':
         return { text: 'Energía baja posible. Movilidad, técnica, cardio suave. RPE ≤ 7.', intensityCap: 0.85, volumeCap: 0.85 };
       case 'FOLLICULAR':
-        return { text: 'Pico de fuerza y recuperación. Buen momento para PRs e intensidad alta.', intensityCap: 1.05, volumeCap: 1.0 };
+        return { text: 'Pico de fuerza y recuperación. Buen momento para buscar marcas personales e intensidad alta.', intensityCap: 1.05, volumeCap: 1.0 };
       case 'OVULATION':
-        return { text: 'Máximo rendimiento neuromuscular. Push compound lifts.', intensityCap: 1.05, volumeCap: 1.0 };
+        return { text: 'Máximo rendimiento neuromuscular. Prioriza ejercicios compuestos.', intensityCap: 1.05, volumeCap: 1.0 };
       case 'LUTEAL':
-        return { text: 'Energía variable. Volumen moderado, evita fallar reps. RPE ≤ 8.', intensityCap: 0.95, volumeCap: 0.9 };
+        return { text: 'Energía variable. Volumen moderado, evita llegar al fallo. RPE ≤ 8.', intensityCap: 0.95, volumeCap: 0.9 };
     }
   }
 }

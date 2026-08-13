@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CycleService } from '../cycle/cycle.service';
 import { CreateRoutineDto, UpdateRoutineDto } from './dto/routine.dto';
@@ -26,6 +31,7 @@ export class RoutinesService {
   }
 
   async create(userId: string, dto: CreateRoutineDto) {
+    this.assertUniqueExercises(dto.exercises);
     return this.prisma.routine.create({
       data: {
         userId,
@@ -50,6 +56,7 @@ export class RoutinesService {
   async update(userId: string, id: string, dto: UpdateRoutineDto) {
     await this.assertOwn(userId, id);
     if (dto.exercises) {
+      this.assertUniqueExercises(dto.exercises);
       await this.prisma.routineExercise.deleteMany({ where: { routineId: id } });
     }
     return this.prisma.routine.update({
@@ -99,5 +106,12 @@ export class RoutinesService {
     const routine = await this.prisma.routine.findUnique({ where: { id } });
     if (!routine) throw new NotFoundException();
     if (routine.userId !== userId) throw new ForbiddenException();
+  }
+
+  private assertUniqueExercises(exercises: CreateRoutineDto['exercises']) {
+    const ids = exercises.map((exercise) => exercise.exerciseId);
+    if (new Set(ids).size !== ids.length) {
+      throw new BadRequestException('No puedes repetir un ejercicio en la misma rutina.');
+    }
   }
 }

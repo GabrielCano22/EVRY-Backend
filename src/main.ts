@@ -12,9 +12,11 @@ async function bootstrap() {
 
   app.use(helmet());
   app.use(cookieParser());
+  // __dirname apunta a dist/ al ejecutar la versión compilada; de esta forma
+  // los GIF y JPG se sirven aunque el proceso se inicie desde otra carpeta.
   app.use(
     '/media/exercises',
-    express.static(join(process.cwd(), 'assets', 'exercises'), {
+    express.static(join(__dirname, '..', 'assets', 'exercises'), {
       immutable: true,
       maxAge: '365d',
       fallthrough: false,
@@ -42,7 +44,7 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('EVRY API')
-    .setDescription('Fitness app with hormonal cycle integration')
+    .setDescription('Aplicación de entrenamiento adaptativo con integración del ciclo hormonal')
     .setVersion('0.1')
     .addBearerAuth()
     .build();

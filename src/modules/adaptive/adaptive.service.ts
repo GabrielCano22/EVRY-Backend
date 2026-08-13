@@ -74,16 +74,16 @@ export class AdaptiveService {
       const inc = lastTopWeight >= 60 ? 2.5 : 1.0;
       targetWeight = Math.round((lastTopWeight + inc) * intensityCap * 2) / 2;
       action = 'PROGRESS';
-      rationale.push(`Última sesión RPE ${lastRpe} ≤ 8, completaste ${lastReps} reps. Sube ${inc} kg.`);
+      rationale.push(`Última sesión RPE ${lastRpe} ≤ 8, completaste ${lastReps} repeticiones. Sube ${inc} kg.`);
     } else if (prev) {
       const prevTopWeight = Math.max(...prev.map((s) => s.weightKg ?? 0));
       const stalled = lastTopWeight <= prevTopWeight && lastRpe >= 9;
       if (stalled) {
         targetWeight = Math.round(lastTopWeight * 0.9 * 2) / 2;
         action = 'DELOAD';
-        rationale.push(`Estancado 2 sesiones con RPE ≥ 9. Deload 10% para resetear.`);
+        rationale.push(`Estancado 2 sesiones con RPE ≥ 9. Descarga 10% para reiniciar.`);
       } else {
-        rationale.push(`Mantén peso, busca mejorar reps o velocidad.`);
+        rationale.push(`Mantén el peso, busca mejorar repeticiones o velocidad.`);
       }
     }
 
@@ -95,7 +95,7 @@ export class AdaptiveService {
     if (readiness && readiness.score < 50 && action === 'PROGRESS') {
       action = 'HOLD';
       targetWeight = lastTopWeight;
-      rationale.push(`Readiness ${readiness.score.toFixed(0)}/100 baja: posponemos progresión.`);
+      rationale.push(`Estado diario ${readiness.score.toFixed(0)}/100 bajo: posponemos la progresión.`);
     }
 
     const confidence = Math.min(1, sessions.length / 3) * (phaseInfo ? 1 : 0.85);

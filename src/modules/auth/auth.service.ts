@@ -14,7 +14,7 @@ export class AuthService {
     const email = dto.email.trim().toLowerCase();
     const name = dto.name.trim();
     const exists = await this.prisma.user.findUnique({ where: { email } });
-    if (exists) throw new ConflictException('Email already in use');
+    if (exists) throw new ConflictException('El correo electrónico ya está registrado.');
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.prisma.user.create({
@@ -32,9 +32,9 @@ export class AuthService {
   async login(dto: LoginDto) {
     const email = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) throw new UnauthorizedException('Las credenciales no son válidas.');
     const ok = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('Invalid credentials');
+    if (!ok) throw new UnauthorizedException('Las credenciales no son válidas.');
     return this.issueTokens(user.id, user.email);
   }
 
@@ -45,7 +45,7 @@ export class AuthService {
       include: { user: true },
     });
     if (!record || record.revokedAt || record.expiresAt < new Date()) {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
     }
     await this.prisma.refreshToken.update({
       where: { id: record.id },

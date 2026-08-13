@@ -35,7 +35,11 @@ export class ExercisesService {
     return this.prisma.exercise.findMany({
       where: {
         AND: [
-          { OR: [{ ownerId: null }, { ownerId: userId }] },
+          // Los 1.324 ejercicios del catálogo oficial tienen sourceId y medios
+          // locales. Conservamos los ejercicios antiguos sin sourceId para
+          // datos históricos, pero no los mostramos en el selector porque no
+          // tienen GIF/JPG asociados.
+          { OR: [{ sourceId: { not: null } }, { ownerId: userId }] },
           opts.muscleGroup ? { muscleGroup: opts.muscleGroup } : {},
           opts.equipment ? { equipment: opts.equipment } : {},
           opts.category ? { category: { equals: opts.category, mode: 'insensitive' } } : {},
