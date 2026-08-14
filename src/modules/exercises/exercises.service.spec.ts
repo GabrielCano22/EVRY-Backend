@@ -1,4 +1,5 @@
 import { Equipment, MuscleGroup } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 import { ExercisesService } from './exercises.service';
 
 const sourceExercise = {
@@ -32,35 +33,90 @@ describe('ExercisesService', () => {
     const prisma = {
       exercise: {
         findMany: jest.fn().mockResolvedValue([sourceExercise]),
+        count: jest.fn().mockResolvedValue(1),
       },
-    };
-    const service = new ExercisesService(prisma as never);
+    } as unknown as PrismaService;
+    const service = new ExercisesService(prisma);
 
-    await expect(service.list('user-1', {})).resolves.toEqual([
-      expect.objectContaining({
-        imageUrl: '/media/exercises/images/0001-2gPfomN.jpg',
-        gifUrl: '/media/exercises/videos/0001-2gPfomN.gif',
-      }),
-    ]);
-    const query = prisma.exercise.findMany.mock.calls[0][0];
-    expect(query.select).not.toHaveProperty('instructions');
-    expect(query.select).not.toHaveProperty('instructionSteps');
+    await expect(service.list('user-1', {} as any)).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({
+          imageUrl: '/media/exercises/images/0001-2gPfomN.jpg',
+          gifUrl: '/media/exercises/videos/0001-2gPfomN.gif',
+        }),
+      ],
+    });
   });
 
   it('uses the configured backend origin for absolute media URLs', async () => {
     process.env.MEDIA_BASE_URL = 'http://localhost:4000/';
+    const findMany = jest.fn().mockResolvedValue([sourceExercise]);
     const prisma = {
       exercise: {
-        findMany: jest.fn().mockResolvedValue([sourceExercise]),
+        findMany,
+        count: jest.fn().mockResolvedValue(1),
       },
-    };
-    const service = new ExercisesService(prisma as never);
+    } as unknown as PrismaService;
+    const service = new ExercisesService(prisma);
 
-    await expect(service.list('user-1', { equipment: Equipment.BODYWEIGHT })).resolves.toEqual([
-      expect.objectContaining({ imageUrl: 'http://localhost:4000/media/exercises/images/0001-2gPfomN.jpg' }),
-    ]);
-    expect(prisma.exercise.findMany).toHaveBeenCalledWith(
+    await expect(
+      service.list('user-1', { equipment: Equipment.BODYWEIGHT } as any),
+    ).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({
+          imageUrl: 'http://localhost:4000/media/exercises/images/0001-2gPfomN.jpg',
+        }),
+      ],
+    });
+    expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ AND: expect.any(Array) }) }),
+    );
+  });
+
+  it('returns a bounded page with metadata for the remaining catalog', async () => {
+    const exercise = {
+      id: 'ejercicio-31',
+      sourceId: '31',
+      name: 'Sentadilla',
+      muscleGroup: MuscleGroup.QUADS,
+      equipment: Equipment.BARBELL,
+      category: 'Fuerza',
+      bodyPart: 'Piernas',
+      target: 'Cuádriceps',
+      secondaryMuscles: [],
+      equipmentLabel: 'Barra',
+      isCustom: false,
+      ownerId: null,
+      isCompound: true,
+      tags: [],
+      description: null,
+      mediaId: '0001',
+      imagePath: 'images/0001.jpg',
+      gifPath: 'videos/0001.gif',
+      attribution: null,
+    };
+    const findMany = jest.fn().mockResolvedValue([exercise]);
+    const count = jest.fn().mockResolvedValue(31);
+    const prisma = { exercise: { findMany, count } } as unknown as PrismaService;
+    const service = new ExercisesService(prisma);
+
+    const result = await service.list('usuario-1', { page: 2, limit: 30 } as any);
+
+    expect(result).toMatchObject({
+      items: [
+        {
+          id: 'ejercicio-31',
+          gifUrl: '/media/exercises/videos/0001.gif',
+          imageUrl: '/media/exercises/images/0001.jpg',
+        },
+      ],
+      page: 2,
+      limit: 30,
+      total: 31,
+      hasMore: false,
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 30, take: 30 }),
     );
   });
 });

@@ -27,7 +27,14 @@ export class WorkoutsService {
   async get(userId: string, id: string) {
     const w = await this.prisma.workout.findUnique({
       where: { id },
-      include: { sets: { include: { exercise: true }, orderBy: { order: 'asc' } } },
+      include: {
+        sets: { include: { exercise: true }, orderBy: { order: 'asc' } },
+        routine: {
+          include: {
+            exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
+          },
+        },
+      },
     });
     if (!w) throw new NotFoundException();
     if (w.userId !== userId) throw new ForbiddenException();
