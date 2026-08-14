@@ -1,17 +1,17 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CycleService } from '../cycle/cycle.service';
 import { CreateSetDto, CreateWorkoutDto, FinishWorkoutDto, UpdateSetDto, UpdateWorkoutDto } from './dto/workout.dto';
+import { ServicioSesionActiva } from './servicio-sesion-activa';
 
 @Injectable()
 export class WorkoutsService {
-  constructor(private prisma: PrismaService, private cycle: CycleService) {}
+  constructor(
+    private prisma: PrismaService,
+    private sesionActiva: ServicioSesionActiva,
+  ) {}
 
   async create(userId: string, dto: CreateWorkoutDto) {
-    const phase = await this.cycle.currentPhase(userId).catch(() => null);
-    return this.prisma.workout.create({
-      data: { userId, name: dto.name, notes: dto.notes, cyclePhase: phase ?? undefined },
-    });
+    return this.sesionActiva.iniciarOContinuar(userId, dto);
   }
 
   list(userId: string, take = 20, skip = 0) {
@@ -47,7 +47,9 @@ export class WorkoutsService {
   }
 
   async finish(userId: string, id: string, dto: FinishWorkoutDto) {
-    await this.assertOwn(userId, id);
+    const workout = await this.assertOwn(userId, id);
+    if (workout.endedAt) return workout;
+
     const finished = await this.prisma.workout.update({
       where: { id },
       data: { endedAt: new Date(), notes: dto.notes },
@@ -64,7 +66,11 @@ export class WorkoutsService {
   }
 
   async addSet(userId: string, workoutId: string, dto: CreateSetDto) {
-    await this.assertOwn(userId, workoutId);
+    const workout = await this.assertOwn(userId, workoutId);
+    if (workout.endedAt) {
+      throw new BadRequestException('No puedes registrar series en una sesión finalizada.');
+    }
+
     return this.prisma.workoutSet.create({
       data: { workoutId, ...dto },
       include: { exercise: true },
@@ -96,6 +102,7 @@ export class WorkoutsService {
     const w = await this.prisma.workout.findUnique({ where: { id: workoutId } });
     if (!w) throw new NotFoundException();
     if (w.userId !== userId) throw new ForbiddenException();
+    return w;
   }
 
   // Refresh per-exercise rolling stats: estimated 1RM (Epley), best, slope.

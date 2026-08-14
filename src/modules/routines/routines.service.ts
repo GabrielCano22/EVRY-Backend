@@ -5,12 +5,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CycleService } from '../cycle/cycle.service';
 import { CreateRoutineDto, UpdateRoutineDto } from './dto/routine.dto';
+import { ServicioSesionActiva } from '../workouts/servicio-sesion-activa';
 
 @Injectable()
 export class RoutinesService {
-  constructor(private prisma: PrismaService, private cycle: CycleService) {}
+  constructor(
+    private prisma: PrismaService,
+    private sesionActiva: ServicioSesionActiva,
+  ) {}
 
   async list(userId: string) {
     return this.prisma.routine.findMany({
@@ -91,14 +94,9 @@ export class RoutinesService {
   // Crea Workout enlazado a la rutina, sin sets aún (el usuario los registra al ir).
   async start(userId: string, id: string) {
     const routine = await this.getById(userId, id);
-    const phase = await this.cycle.currentPhase(userId).catch(() => null);
-    return this.prisma.workout.create({
-      data: {
-        userId,
-        name: routine.name,
-        routineId: routine.id,
-        cyclePhase: phase ?? undefined,
-      },
+    return this.sesionActiva.iniciarOContinuar(userId, {
+      name: routine.name,
+      routineId: routine.id,
     });
   }
 

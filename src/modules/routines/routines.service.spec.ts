@@ -1,11 +1,12 @@
 import { RoutinesService } from './routines.service';
+import { ServicioSesionActiva } from '../workouts/servicio-sesion-activa';
 
 describe('RoutinesService', () => {
   it('rechaza ejercicios repetidos dentro de una misma rutina', async () => {
     const prisma = {
       routine: { create: jest.fn() },
     };
-    const service = new RoutinesService(prisma as never, {} as never);
+    const service = new RoutinesService(prisma as never, {} as ServicioSesionActiva);
 
     await expect(
       service.create('user-1', {

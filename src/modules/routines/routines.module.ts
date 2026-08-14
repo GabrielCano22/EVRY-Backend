@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { RoutinesService } from './routines.service';
 import { RoutinesController } from './routines.controller';
-import { CycleModule } from '../cycle/cycle.module';
+import { WorkoutsModule } from '../workouts/workouts.module';
 
 @Module({
-  imports: [CycleModule],
+  imports: [WorkoutsModule],
   providers: [RoutinesService],
   controllers: [RoutinesController],
 })
