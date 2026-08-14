@@ -18,13 +18,28 @@ export class CycleService {
   constructor(private prisma: PrismaService) {}
 
   async upsertEntry(userId: string, dto: UpsertCycleEntryDto) {
-    const { date: dateStr, ...rest } = dto;
+    const { date: dateStr, previousDate: previousDateStr, ...rest } = dto;
     const date = new Date(dateStr);
-    return this.prisma.cycleEntry.upsert({
-      where: { userId_date: { userId, date } },
-      create: { userId, date, ...rest },
-      update: { ...rest, date },
-    });
+    const previousDate = previousDateStr ? new Date(previousDateStr) : null;
+
+    const guardar = (client: Pick<PrismaService, 'cycleEntry'>) =>
+      client.cycleEntry.upsert({
+        where: { userId_date: { userId, date } },
+        create: { userId, date, ...rest },
+        update: { ...rest, date },
+      });
+
+    // Mover un registro a otra fecha debe retirar el registro anterior para
+    // que el calendario no conserve síntomas o flujo obsoletos. La operación
+    // se mantiene atómica para evitar duplicados si el usuario pulsa guardar.
+    if (previousDate && previousDate.getTime() !== date.getTime()) {
+      return this.prisma.$transaction(async (tx) => {
+        await tx.cycleEntry.deleteMany({ where: { userId, date: previousDate } });
+        return guardar(tx);
+      });
+    }
+
+    return guardar(this.prisma);
   }
 
   list(userId: string, from?: string, to?: string) {
