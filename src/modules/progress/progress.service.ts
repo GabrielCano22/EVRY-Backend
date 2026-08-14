@@ -7,7 +7,7 @@ export class ProgressService {
 
   async overview(userId: string) {
     const since = new Date(Date.now() - 30 * 86400000);
-    const [workouts, stats] = await Promise.all([
+    const [workouts, stats, series] = await Promise.all([
       this.prisma.workout.count({ where: { userId, endedAt: { not: null, gte: since } } }),
       this.prisma.exerciseStat.findMany({
         where: { userId },
@@ -15,13 +15,15 @@ export class ProgressService {
         include: { exercise: true },
         take: 10,
       }),
+      this.prisma.workoutSet.findMany({
+        where: { workout: { userId, endedAt: { gte: since } }, isWarmup: false },
+        select: { weightKg: true, reps: true },
+      }),
     ]);
-
-    const totalVolume = await this.prisma.workoutSet.aggregate({
-      where: { workout: { userId, endedAt: { gte: since } }, isWarmup: false },
-      _sum: { weightKg: true, reps: true },
-    });
-    const volumeKg = (totalVolume._sum.weightKg ?? 0) * (totalVolume._sum.reps ?? 0);
+    const volumeKg = series.reduce(
+      (total, serie) => total + (serie.weightKg ?? 0) * (serie.reps ?? 0),
+      0,
+    );
 
     return {
       windowDays: 30,
