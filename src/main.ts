@@ -3,7 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import { join } from 'node:path';
 import { AppModule } from './app.module';
 
@@ -16,6 +16,10 @@ async function bootstrap() {
   // los GIF y JPG se sirven aunque el proceso se inicie desde otra carpeta.
   app.use(
     '/media/exercises',
+    (_request: Request, response: Response, next: NextFunction) => {
+      response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      next();
+    },
     express.static(join(__dirname, '..', 'assets', 'exercises'), {
       immutable: true,
       maxAge: '365d',
