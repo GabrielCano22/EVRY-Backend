@@ -38,7 +38,11 @@ export class AuthService {
     return this.issueTokens(user.id, user.email);
   }
 
-  async refresh(refreshToken: string) {
+  async refresh(refreshToken?: string) {
+    if (!refreshToken?.trim()) {
+      throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
+    }
+
     const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
     const record = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },

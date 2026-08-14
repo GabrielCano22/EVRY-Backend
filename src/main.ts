@@ -4,8 +4,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { join } from 'node:path';
+import type { Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { registerExerciseMedia } from './media/exercise-media.middleware';
+import { PrismaConnectionExceptionFilter } from './common/filters/prisma-connection-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -27,6 +29,19 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
+  const httpServer = app.getHttpAdapter().getInstance();
+  httpServer.get('/', (_request: Request, response: Response) =>
+    response.status(200).json({
+      nombre: 'EVRY API',
+      estado: 'ok',
+      api: '/api',
+      documentacion: '/docs',
+    }),
+  );
+  httpServer.get('/health', (_request: Request, response: Response) =>
+    response.status(200).json({ estado: 'ok' }),
+  );
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -34,6 +49,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  app.useGlobalFilters(new PrismaConnectionExceptionFilter());
 
   const config = new DocumentBuilder()
     .setTitle('EVRY API')
