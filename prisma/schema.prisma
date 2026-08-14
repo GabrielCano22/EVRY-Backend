@@ -182,6 +182,7 @@ model RoutineExercise {
   targetSets     Int      @default(3)
   targetReps     Int?
   targetWeightKg Float?
+  seriesPlan     Json?
   notes          String?
 
   @@index([routineId])

@@ -24,9 +24,14 @@ export type DatasetExercise = {
 
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
 
-export function mapBodyPartToMuscleGroup(bodyPart: string, target: string): MuscleGroup {
+export function mapBodyPartToMuscleGroup(bodyPart: string, target: string, name = ''): MuscleGroup {
   const part = normalize(bodyPart);
   const targetName = normalize(target);
+  const exerciseName = normalize(name);
+
+  if (/burpee|thruster|man maker|turkish get up|clean and jerk|snatch|mountain climber/.test(`${exerciseName} ${targetName}`)) {
+    return MuscleGroup.FULL_BODY;
+  }
 
   if (part === 'back') return MuscleGroup.BACK;
   if (part === 'chest') return MuscleGroup.CHEST;
@@ -79,7 +84,7 @@ export function toExerciseCreateInput(record: DatasetExercise): Prisma.ExerciseC
   return {
     sourceId: record.id,
     name: traducirNombreEjercicio(record.name),
-    muscleGroup: mapBodyPartToMuscleGroup(record.body_part, record.target),
+    muscleGroup: mapBodyPartToMuscleGroup(record.body_part, record.target, record.name),
     equipment: mapEquipment(record.equipment),
     category: record.category,
     bodyPart: record.body_part,

@@ -20,6 +20,7 @@ describe('exercise catalog mapping', () => {
     expect(mapBodyPartToMuscleGroup('upper arms', 'biceps')).toBe(MuscleGroup.BICEPS);
     expect(mapBodyPartToMuscleGroup('upper legs', 'glutes')).toBe(MuscleGroup.GLUTES);
     expect(mapBodyPartToMuscleGroup('waist', 'abs')).toBe(MuscleGroup.CORE);
+    expect(mapBodyPartToMuscleGroup('cardio', 'cardio', 'Burpee')).toBe(MuscleGroup.FULL_BODY);
   });
 
   it('adds only evidence-based catalog tags', () => {

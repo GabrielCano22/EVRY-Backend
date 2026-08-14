@@ -11,12 +11,22 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+export class RoutineSeriesPlanDto {
+  @IsOptional() @IsInt() @Min(0) @Max(100) reps?: number | null;
+  @IsOptional() @IsNumber() @Min(0) @Max(500) weightKg?: number | null;
+}
+
 export class RoutineExerciseDto {
   @IsString() exerciseId!: string;
   @IsInt() @Min(0) order!: number;
   @IsInt() @Min(1) @Max(20) targetSets!: number;
   @IsOptional() @IsInt() @Min(1) @Max(100) targetReps?: number;
   @IsOptional() @IsNumber() targetWeightKg?: number;
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RoutineSeriesPlanDto)
+  seriesPlan?: RoutineSeriesPlanDto[];
   @IsOptional() @IsString() notes?: string;
 }
 

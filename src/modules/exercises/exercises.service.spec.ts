@@ -119,4 +119,26 @@ describe('ExercisesService', () => {
       expect.objectContaining({ skip: 30, take: 30 }),
     );
   });
+
+  it('combines target and equipment filters for focused muscle selection', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const count = jest.fn().mockResolvedValue(0);
+    const prisma = { exercise: { findMany, count } } as unknown as PrismaService;
+    const service = new ExercisesService(prisma);
+
+    await service.list('usuario-1', {
+      category: 'back',
+      target: 'lats',
+      equipment: Equipment.BARBELL,
+    } as any);
+
+    const where = findMany.mock.calls[0][0].where;
+    expect(where.AND).toEqual(
+      expect.arrayContaining([
+        { category: { equals: 'back', mode: 'insensitive' } },
+        { target: { contains: 'lats', mode: 'insensitive' } },
+        { equipment: Equipment.BARBELL },
+      ]),
+    );
+  });
 });

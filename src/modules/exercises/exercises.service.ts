@@ -45,6 +45,7 @@ export class ExercisesService {
         opts.muscleGroup ? { muscleGroup: opts.muscleGroup } : {},
         opts.equipment ? { equipment: opts.equipment } : {},
         opts.category ? { category: { equals: opts.category, mode: 'insensitive' } } : {},
+        opts.target ? { target: { contains: opts.target, mode: 'insensitive' } } : {},
         opts.q
           ? {
               OR: [
