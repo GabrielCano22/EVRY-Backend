@@ -36,4 +36,9 @@ export class ListExercisesDto {
   @IsString()
   @MaxLength(80)
   category?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  target?: string;
 }

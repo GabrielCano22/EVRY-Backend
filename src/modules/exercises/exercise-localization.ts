@@ -322,9 +322,17 @@ function limpiar(texto: string) {
     .trim();
 }
 
+function normalizarNombreCanonico(texto: string) {
+  return texto
+    .replace(/\blastrado\s+(sentadilla|zancada|prensa|extensi[oó]n)\b/gi, '$1 lastrada')
+    .replace(/\blastrado\s+(curl)\b/gi, '$1 lastrado')
+    .replace(/\bpress\s+banca\b/gi, 'press de banca')
+    .replace(/\bdominadas\s+agarre\b/gi, 'dominadas con agarre');
+}
+
 export function traducirNombreEjercicio(nombre: string) {
   let resultado = nombre.replace(/\s*\((male|female)\)\s*/gi, ' ').replace(/\s+/g, ' ').trim();
   for (const [patron, reemplazo] of REEMPLAZOS) resultado = resultado.replace(patron, reemplazo);
-  resultado = limpiar(resultado);
+  resultado = normalizarNombreCanonico(limpiar(resultado));
   return resultado ? `${resultado[0].toLocaleUpperCase('es-CO')}${resultado.slice(1)}` : 'Ejercicio';
 }

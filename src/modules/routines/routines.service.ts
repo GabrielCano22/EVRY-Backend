@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateRoutineDto, UpdateRoutineDto } from './dto/routine.dto';
 import { ServicioSesionActiva } from '../workouts/servicio-sesion-activa';
@@ -48,6 +49,7 @@ export class RoutinesService {
             targetSets: e.targetSets,
             targetReps: e.targetReps,
             targetWeightKg: e.targetWeightKg,
+            seriesPlan: e.seriesPlan ? (e.seriesPlan as unknown as Prisma.InputJsonValue) : undefined,
             notes: e.notes,
           })),
         },
@@ -76,6 +78,7 @@ export class RoutinesService {
                 targetSets: e.targetSets,
                 targetReps: e.targetReps,
                 targetWeightKg: e.targetWeightKg,
+                seriesPlan: e.seriesPlan ? (e.seriesPlan as unknown as Prisma.InputJsonValue) : undefined,
                 notes: e.notes,
               })),
             }
