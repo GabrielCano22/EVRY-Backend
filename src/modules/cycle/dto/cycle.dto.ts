@@ -3,6 +3,8 @@ import { Flow } from '@prisma/client';
 
 export class UpsertCycleEntryDto {
   @IsDateString() date!: string;
+  /** Fecha original cuando se edita un registro y se mueve de día. */
+  @IsOptional() @IsDateString() previousDate?: string;
   @IsOptional() @IsEnum(Flow) flow?: Flow;
   @IsOptional() @IsArray() @IsString({ each: true }) symptoms?: string[];
   @IsOptional() @IsInt() @Min(1) @Max(5) energy?: number;
