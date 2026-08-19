@@ -49,11 +49,12 @@ function utcDate({ year, month, day, hour = 0, minute = 0, second = 0 }: Partial
 function formatter(timeZone: 'America/Bogota'): Intl.DateTimeFormat {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone,
-    calendar: 'iso8601',
+    calendar: 'gregory',
     numberingSystem: 'latn',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    era: 'short',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -66,44 +67,64 @@ function zonedParts(value: Date, timeZone: 'America/Bogota'): CivilTimeParts {
   const values = Object.fromEntries(
     formatter(timeZone)
       .formatToParts(value)
-      .filter((part) => ['year', 'month', 'day', 'hour', 'minute', 'second'].includes(part.type))
-      .map((part) => [part.type, Number(part.value)]),
-  ) as Record<keyof CivilTimeParts, number>;
+      .filter((part) => ['year', 'month', 'day', 'era', 'hour', 'minute', 'second'].includes(part.type))
+      .map((part) => [part.type, part.value]),
+  ) as Record<keyof CivilTimeParts | 'era', string>;
 
-  return values;
+  return {
+    year: values.era === 'BC' ? 1 - Number(values.year) : Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+    second: Number(values.second),
+  };
 }
 
-function zonedMidnight(parts: CivilDateParts, timeZone: 'America/Bogota'): Date {
-  const localMidnightAsUtc = utcDate(parts);
-  let candidate = localMidnightAsUtc;
+function compareCivilParts(a: CivilDateParts, b: CivilDateParts): number {
+  if (a.year !== b.year) return a.year - b.year;
+  if (a.month !== b.month) return a.month - b.month;
+  return a.day - b.day;
+}
 
-  // Resolve the IANA offset at the target local day rather than assuming a
-  // fixed UTC offset. This keeps the half-open interval valid if zone rules change.
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const local = zonedParts(candidate, timeZone);
-    const offset = utcDate(local).getTime() - candidate.getTime();
-    const next = new Date(localMidnightAsUtc.getTime() - offset);
-    if (next.getTime() === candidate.getTime()) break;
-    candidate = next;
-  }
+function firstInstantOfCivilDate(parts: CivilDateParts, timeZone: 'America/Bogota'): Date {
+  const nominal = utcDate(parts).getTime();
+  const searchRadius = 2 * 24 * 60 * 60 * 1000;
+  let lower = nominal - searchRadius;
+  let upper = nominal + searchRadius;
 
-  const local = zonedParts(candidate, timeZone);
-  if (local.year !== parts.year || local.month !== parts.month || local.day !== parts.day || local.hour !== 0) {
+  if (compareCivilParts(zonedParts(new Date(lower), timeZone), parts) > 0 || compareCivilParts(zonedParts(new Date(upper), timeZone), parts) < 0) {
     throw new RangeError('No se pudo resolver el inicio local de la fecha civil.');
   }
-  return candidate;
+
+  // Local date order is monotonic over instants, even when a zone skips or
+  // repeats wall-clock times. Binary search therefore finds the first instant
+  // with the requested date without presuming that 00:00 exists.
+  while (lower < upper) {
+    const middle = lower + Math.floor((upper - lower) / 2);
+    if (compareCivilParts(zonedParts(new Date(middle), timeZone), parts) < 0) {
+      lower = middle + 1;
+    } else {
+      upper = middle;
+    }
+  }
+
+  const boundary = new Date(lower);
+  if (compareCivilParts(zonedParts(boundary, timeZone), parts) !== 0) {
+    throw new RangeError('No se pudo resolver el inicio local de la fecha civil.');
+  }
+  return boundary;
 }
 
-function nextCivilDate(value: CivilDate): CivilDate {
-  const parts = civilParts(value);
+function nextCivilParts(parts: CivilDateParts): CivilDateParts {
   const next = utcDate(parts);
   next.setUTCDate(next.getUTCDate() + 1);
-  return civilDateFromParts({ year: next.getUTCFullYear(), month: next.getUTCMonth() + 1, day: next.getUTCDate() });
+  return { year: next.getUTCFullYear(), month: next.getUTCMonth() + 1, day: next.getUTCDate() };
 }
 
 export function parseCivilDate(value: string): Date {
   const canonical = civilDateFromParts(civilParts(value));
-  const parsed = zonedMidnight(civilParts(canonical), APP_TIME_ZONE);
+  const parsed = firstInstantOfCivilDate(civilParts(canonical), APP_TIME_ZONE);
   if (formatCivilDate(parsed) !== canonical) throw new RangeError('La fecha civil no es válida.');
   return parsed;
 }
@@ -137,7 +158,7 @@ export function civilDateBounds(
   timeZone: 'America/Bogota' = APP_TIME_ZONE,
 ): { from: Date; toExclusive: Date } {
   const canonical = civilDateFromParts(civilParts(value));
-  const from = zonedMidnight(civilParts(canonical), timeZone);
-  const toExclusive = zonedMidnight(civilParts(nextCivilDate(canonical)), timeZone);
+  const from = firstInstantOfCivilDate(civilParts(canonical), timeZone);
+  const toExclusive = firstInstantOfCivilDate(nextCivilParts(civilParts(canonical)), timeZone);
   return { from, toExclusive };
 }

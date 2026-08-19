@@ -37,6 +37,30 @@ describe('civil dates', () => {
     expect(yearEnd.from.getTime()).toBeLessThan(yearEnd.toExclusive.getTime());
   });
 
+  it('uses the first existing instant when Bogota skips a historical midnight', () => {
+    expect(parseCivilDate('1992-05-03')).toEqual(new Date('1992-05-03T05:00:00.000Z'));
+
+    const beforeTransition = civilDateBounds('1992-05-02');
+    expect(beforeTransition.from).toEqual(new Date('1992-05-02T05:00:00.000Z'));
+    expect(beforeTransition.toExclusive).toEqual(new Date('1992-05-03T05:00:00.000Z'));
+    expect(beforeTransition.toExclusive.getTime() - beforeTransition.from.getTime()).toBe(24 * 60 * 60 * 1000);
+
+    const transitionDay = civilDateBounds('1992-05-03');
+    expect(transitionDay.from).toEqual(new Date('1992-05-03T05:00:00.000Z'));
+    expect(transitionDay.toExclusive).toEqual(new Date('1992-05-04T04:00:00.000Z'));
+    expect(transitionDay.from.getTime()).toBeLessThan(transitionDay.toExclusive.getTime());
+    expect(transitionDay.toExclusive.getTime() - transitionDay.from.getTime()).toBe(23 * 60 * 60 * 1000);
+  });
+
+  it('keeps the public civil-date maximum while bounding its following internal day', () => {
+    const bounds = civilDateBounds('9999-12-31');
+
+    expect(bounds.from.getTime()).toBeLessThan(bounds.toExclusive.getTime());
+    expect(bounds.toExclusive.getUTCFullYear()).toBe(10000);
+    expect(bounds.toExclusive.getUTCMonth()).toBe(0);
+    expect(bounds.toExclusive.getUTCDate()).toBe(1);
+  });
+
   it('accepts a same-day inclusive range and rejects inverted or future ranges', () => {
     expect(() => assertCivilDateRange('2026-08-19', '2026-08-19', '2026-08-19')).not.toThrow();
     expect(() => assertCivilDateRange('2026-08-20', '2026-08-19', '2026-08-19')).toThrow(
