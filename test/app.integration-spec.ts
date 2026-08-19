@@ -15,13 +15,28 @@ describe('test database guard', () => {
     expect(() => callGuard(productionUrl, productionUrl)).toThrow('different');
   });
 
-  it('rejects a database URL without an explicit test marker', () => {
-    expect(() => callGuard('postgresql://evry:secret@localhost:5432/evry_development', productionUrl)).toThrow('explicit test marker');
+  it('rejects the same database when only protocol, credentials, query, hash, and default port differ', () => {
+    expect(() => callGuard(
+      'postgresql://test-user:password@LOCALHOST:5432/evry_test?application_name=test#fragment',
+      'postgres://production:other-password@localhost/evry_test',
+    )).toThrow('different');
+  });
+
+  it.each([
+    'postgresql://test-user:secret@localhost:5432/evry_development',
+    'postgresql://evry:secret-test@localhost:5432/evry_development',
+    'postgresql://evry:secret@localhost:5432/evry_development?application_name=test',
+  ])('rejects test markers outside the database name: %s', (url) => {
+    expect(() => callGuard(url, productionUrl)).toThrow('explicit test marker');
   });
 
   it('returns an explicitly marked test database URL distinct from runtime', () => {
-    const testUrl = 'postgresql://evry:secret@localhost:5432/evry_test';
+    const testUrl = 'postgresql://evry:secret@localhost:5432/evry_test?application_name=evry';
 
     expect(callGuard(testUrl, productionUrl)).toBe(testUrl);
+  });
+
+  it('runs the integration runner with the America/Bogota timezone', () => {
+    expect(process.env.TZ).toBe('America/Bogota');
   });
 });

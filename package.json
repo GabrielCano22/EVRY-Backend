@@ -17,11 +17,11 @@
     "exercises:import": "ts-node prisma/import-exercises.ts",
     "exercises:check-import": "ts-node scripts/verify-exercise-import.ts",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
-    "test": "jest",
+    "test": "set \"TZ=America/Bogota\" && jest",
     "lint:check": "eslint \"{src,test,scripts}/**/*.ts\" --max-warnings 0",
     "lint:fix": "eslint \"{src,test,scripts}/**/*.ts\" --fix",
-    "test:unit": "jest --runInBand",
-    "test:integration": "jest --config test/jest-integration.json --runInBand",
+    "test:unit": "set \"TZ=America/Bogota\" && jest --runInBand",
+    "test:integration": "set \"TZ=America/Bogota\" && jest --config test/jest-integration.json --runInBand",
     "test:db:migrate": "ts-node scripts/migrate-test-database.ts"
   },
   "dependencies": {
