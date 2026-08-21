@@ -7,6 +7,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
+const DUMMY_BCRYPT_HASH = '$2b$12$EeP/sfETTTWk4MPVu2UTLOeIbAN.OP1CE4bDsFHdHlgRqcecbiXxO';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -37,9 +39,8 @@ export class AuthService {
   async login(dto: LoginDto) {
     const email = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) throw new UnauthorizedException('Las credenciales no son válidas.');
-    const ok = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('Las credenciales no son válidas.');
+    const ok = await bcrypt.compare(dto.password, user?.passwordHash ?? DUMMY_BCRYPT_HASH);
+    if (!user || !ok) throw new UnauthorizedException('Las credenciales no son válidas.');
     return this.issueTokens(user.id, user.email);
   }
 

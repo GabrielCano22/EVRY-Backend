@@ -26,7 +26,9 @@ function jwtSecret(env: Record<string, unknown>, key: string): string {
     normalizedValue === DEVELOPMENT_SECRET ||
     normalizedValue.includes('change-me') ||
     normalizedValue.includes('replace-with');
-  const isTestFixtureSecret = normalizedValue.startsWith('evry-test-');
+  const isTestFixtureSecret =
+    normalizedValue.startsWith('evry-test-') ||
+    /^(?:test-(?:access|refresh)-secret)(?:[-_]|$)/.test(normalizedValue);
   if (
     value.length < MIN_SECRET_LENGTH ||
     isDocumentedPlaceholder ||
@@ -65,7 +67,12 @@ export function validateEnvironment(env: Record<string, unknown>): Record<string
   } catch {
     throw new Error('DATABASE_URL must be a valid Prisma URL.');
   }
-  if (!['postgres:', 'postgresql:'].includes(parsedDatabaseUrl.protocol)) {
+  if (
+    !['postgres:', 'postgresql:'].includes(parsedDatabaseUrl.protocol) ||
+    !parsedDatabaseUrl.hostname ||
+    !parsedDatabaseUrl.pathname ||
+    parsedDatabaseUrl.pathname === '/'
+  ) {
     throw new Error('DATABASE_URL must be a PostgreSQL Prisma URL.');
   }
 

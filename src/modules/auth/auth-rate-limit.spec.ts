@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { randomBytes } from 'node:crypto';
 import request from 'supertest';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthService } from './auth.service';
@@ -8,8 +9,9 @@ describe('authentication rate limits', () => {
   let app: INestApplication;
   const environment = {
     DATABASE_URL: 'postgresql://evry:password@localhost:5432/evry_test?schema=public',
-    JWT_ACCESS_SECRET: 'test-access-secret-with-at-least-thirty-two-characters',
-    JWT_REFRESH_SECRET: 'test-refresh-secret-with-at-least-thirty-two-characters',
+    NODE_ENV: 'test',
+    JWT_ACCESS_SECRET: `evry-test-${randomBytes(32).toString('hex')}`,
+    JWT_REFRESH_SECRET: `evry-test-${randomBytes(32).toString('hex')}`,
     PORT: '4000',
     SWAGGER_ENABLED: 'false',
   };

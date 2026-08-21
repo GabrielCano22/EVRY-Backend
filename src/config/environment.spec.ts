@@ -1,9 +1,10 @@
+import { randomBytes } from 'node:crypto';
 import { validateEnvironment } from './environment';
 
 const validEnvironment = () => ({
   DATABASE_URL: 'postgresql://evry:password@localhost:5432/evry?schema=public',
-  JWT_ACCESS_SECRET: 'access-secret-with-at-least-thirty-two-characters',
-  JWT_REFRESH_SECRET: 'refresh-secret-with-at-least-thirty-two-characters',
+  JWT_ACCESS_SECRET: randomBytes(32).toString('hex'),
+  JWT_REFRESH_SECRET: randomBytes(32).toString('hex'),
   PORT: '4000',
   SWAGGER_ENABLED: 'false',
 });
@@ -27,16 +28,20 @@ describe('validateEnvironment', () => {
   });
 
   it('rechaza secretos equivalentes después de normalizarlos', () => {
+    const environment = validEnvironment();
     expect(() =>
       validateEnvironment({
-        ...validEnvironment(),
-        JWT_REFRESH_SECRET: ' ACCESS-SECRET-WITH-AT-LEAST-THIRTY-TWO-CHARACTERS ',
+        ...environment,
+        JWT_REFRESH_SECRET: ` ${String(environment.JWT_ACCESS_SECRET).toUpperCase()} `,
       }),
     ).toThrow('different');
   });
 
   it.each([
     ['DATABASE_URL ausente', { DATABASE_URL: ' ' }],
+    ['URL Prisma sin hostname', { DATABASE_URL: 'postgresql:///evry' }],
+    ['URL Prisma sin nombre de base', { DATABASE_URL: 'postgresql://localhost' }],
+    ['URL Prisma con pathname vacío', { DATABASE_URL: 'postgresql://localhost:5432/' }],
     ['puerto no numérico', { PORT: 'four-thousand' }],
     ['puerto fuera de rango', { PORT: '65536' }],
     ['flag Swagger no booleano', { SWAGGER_ENABLED: 'yes' }],
@@ -55,7 +60,7 @@ describe('validateEnvironment', () => {
       validateEnvironment({
         ...validEnvironment(),
         NODE_ENV: 'production',
-        JWT_ACCESS_SECRET: 'evry-test-access-secret-with-at-least-32-characters',
+        JWT_ACCESS_SECRET: `evry-test-${randomBytes(32).toString('hex')}`,
       }),
     ).toThrow('JWT_ACCESS_SECRET');
   });
@@ -65,8 +70,18 @@ describe('validateEnvironment', () => {
       validateEnvironment({
         ...validEnvironment(),
         NODE_ENV: ' TEST ',
-        JWT_ACCESS_SECRET: 'evry-test-access-secret-with-at-least-32-characters',
+        JWT_ACCESS_SECRET: `evry-test-${randomBytes(32).toString('hex')}`,
       }),
     ).not.toThrow();
+  });
+
+  it('rechaza el fixture público heredado fuera de NODE_ENV=test', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment(),
+        NODE_ENV: 'production',
+        JWT_ACCESS_SECRET: `test-access-secret-${randomBytes(32).toString('hex')}`,
+      }),
+    ).toThrow('JWT_ACCESS_SECRET');
   });
 });
