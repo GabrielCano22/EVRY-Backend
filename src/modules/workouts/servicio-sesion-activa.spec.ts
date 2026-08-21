@@ -22,6 +22,10 @@ describe('ServicioSesionActiva', () => {
         routineId: 'rutina-1',
       }),
     ).resolves.toBe(activa);
+    expect(prismaMock.workout.findFirst).toHaveBeenCalledWith({
+      where: { userId: 'usuario-1', endedAt: null, cancelledAt: null },
+      orderBy: { startedAt: 'desc' },
+    });
     expect(prismaMock.workout.create).not.toHaveBeenCalled();
   });
 

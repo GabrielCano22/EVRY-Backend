@@ -17,7 +17,7 @@ export class ServicioSesionActiva {
 
   async iniciarOContinuar(userId: string, datos: DatosNuevaSesion) {
     const activa = await this.prisma.workout.findFirst({
-      where: { userId, endedAt: null },
+      where: { userId, endedAt: null, cancelledAt: null },
       orderBy: { startedAt: 'desc' },
     });
     if (activa) return activa;

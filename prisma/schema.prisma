@@ -137,21 +137,23 @@ model Exercise {
 }
 
 model Workout {
-  id         String      @id @default(cuid())
-  userId     String
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name       String
-  startedAt  DateTime    @default(now())
-  endedAt    DateTime?
-  cyclePhase CyclePhase?
-  notes      String?
-  routineId  String?
-  routine    Routine?    @relation(fields: [routineId], references: [id], onDelete: SetNull)
-  createdAt  DateTime    @default(now())
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  startedAt   DateTime    @default(now())
+  endedAt     DateTime?
+  cancelledAt DateTime?
+  cyclePhase  CyclePhase?
+  notes       String?
+  routineId   String?
+  routine     Routine?    @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  createdAt   DateTime    @default(now())
 
   sets WorkoutSet[]
 
   @@index([userId, startedAt(sort: Desc)])
+  @@index([userId, endedAt(sort: Desc), id])
 }
 
 model Routine {
@@ -189,21 +191,25 @@ model RoutineExercise {
 }
 
 model WorkoutSet {
-  id          String   @id @default(cuid())
-  workoutId   String
-  workout     Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
-  exerciseId  String
-  exercise    Exercise @relation(fields: [exerciseId], references: [id])
-  order       Int
-  weightKg    Float?
-  reps        Int?
-  durationS   Int?
-  rpe         Int?
-  isWarmup    Boolean  @default(false)
-  completedAt DateTime @default(now())
+  id               String   @id @default(cuid())
+  workoutId        String
+  workout          Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exerciseId       String
+  exercise         Exercise @relation(fields: [exerciseId], references: [id])
+  order            Int
+  weightKg         Float?
+  reps             Int?
+  durationS        Int?
+  rpe              Int?
+  isWarmup         Boolean  @default(false)
+  completedAt      DateTime @default(now())
+  clientMutationId String?
+  techniqueStable  Boolean?
 
+  @@unique([workoutId, clientMutationId])
   @@index([workoutId])
   @@index([exerciseId])
+  @@index([exerciseId, workoutId, completedAt(sort: Desc)])
 }
 
 model CycleEntry {

@@ -13,10 +13,13 @@ export class PrismaConnectionExceptionFilter
   catch(_exception: Prisma.PrismaClientInitializationError, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse();
 
+    response.setHeader('Retry-After', '5');
     response.status(HttpStatus.SERVICE_UNAVAILABLE).json({
       statusCode: HttpStatus.SERVICE_UNAVAILABLE,
       error: 'Service Unavailable',
-      message: 'La base de datos no está disponible. Revisa DATABASE_URL e inténtalo de nuevo.',
+      code: 'DATABASE_UNAVAILABLE',
+      message: 'El servicio de datos no está disponible. Inténtalo de nuevo.',
+      retryable: true,
     });
   }
 }

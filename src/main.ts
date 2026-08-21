@@ -9,6 +9,7 @@ import type { Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { registerExerciseMedia } from './media/exercise-media.middleware';
 import { PrismaConnectionExceptionFilter } from './common/filters/prisma-connection-exception.filter';
+import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -52,7 +53,10 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.useGlobalFilters(new PrismaConnectionExceptionFilter());
+  app.useGlobalFilters(
+    new PrismaExceptionFilter(),
+    new PrismaConnectionExceptionFilter(),
+  );
 
   if (swaggerEnabled) {
     const config = new DocumentBuilder()

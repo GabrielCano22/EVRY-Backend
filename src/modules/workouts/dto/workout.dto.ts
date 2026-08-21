@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, Min, Max, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, IsUUID, Min, Max, MinLength } from 'class-validator';
 
 export class CreateWorkoutDto {
   @IsString() @MinLength(1) name!: string;
@@ -22,6 +22,8 @@ export class CreateSetDto {
   @IsOptional() @IsInt() @Min(0) durationS?: number;
   @IsOptional() @IsInt() @Min(1) @Max(10) rpe?: number;
   @IsOptional() @IsBoolean() isWarmup?: boolean;
+  @IsOptional() @IsUUID() clientMutationId?: string;
+  @IsOptional() @IsBoolean() techniqueStable?: boolean;
 }
 
 export class UpdateSetDto {
