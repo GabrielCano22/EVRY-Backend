@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -8,7 +9,11 @@ import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService, private jwt: JwtService) {}
+  constructor(
+    private prisma: PrismaService,
+    private jwt: JwtService,
+    private config: ConfigService,
+  ) {}
 
   async register(dto: RegisterDto) {
     const email = dto.email.trim().toLowerCase();
@@ -70,14 +75,17 @@ export class AuthService {
     const accessToken = await this.jwt.signAsync(
       { sub: userId, email },
       {
-        secret: process.env.JWT_ACCESS_SECRET ?? 'dev-secret',
-        expiresIn: process.env.JWT_ACCESS_TTL ?? '15m',
+        secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        expiresIn: this.config.get<string>('JWT_ACCESS_TTL') ?? '15m',
       },
     );
 
     const refreshToken = randomBytes(48).toString('hex');
     const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
-    const ttlDays = parseInt((process.env.JWT_REFRESH_TTL ?? '30d').replace('d', ''), 10) || 30;
+    const ttlDays = parseInt(
+      (this.config.get<string>('JWT_REFRESH_TTL') ?? '30d').replace('d', ''),
+      10,
+    ) || 30;
     const expiresAt = new Date(Date.now() + ttlDays * 86400_000);
 
     await this.prisma.refreshToken.create({

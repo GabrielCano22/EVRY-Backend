@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -11,6 +12,8 @@ import { PrismaConnectionExceptionFilter } from './common/filters/prisma-connect
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+  const swaggerEnabled = configService.getOrThrow<boolean>('SWAGGER_ENABLED');
 
   app.use(helmet());
   app.use(cookieParser());
@@ -35,7 +38,7 @@ async function bootstrap() {
       nombre: 'EVRY API',
       estado: 'ok',
       api: '/api',
-      documentacion: '/docs',
+      ...(swaggerEnabled ? { documentacion: '/docs' } : {}),
     }),
   );
   httpServer.get('/health', (_request: Request, response: Response) =>
@@ -51,16 +54,18 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new PrismaConnectionExceptionFilter());
 
-  const config = new DocumentBuilder()
-    .setTitle('EVRY API')
-    .setDescription('Aplicación de entrenamiento adaptativo con integración del ciclo hormonal')
-    .setVersion('0.1')
-    .addBearerAuth()
-    .build();
-  const doc = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, doc);
+  if (swaggerEnabled) {
+    const config = new DocumentBuilder()
+      .setTitle('EVRY API')
+      .setDescription('Aplicación de entrenamiento adaptativo con integración del ciclo hormonal')
+      .setVersion('0.1')
+      .addBearerAuth()
+      .build();
+    const doc = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('docs', app, doc);
+  }
 
-  const port = Number(process.env.PORT ?? 4000);
+  const port = configService.getOrThrow<number>('PORT');
   await app.listen(port);
   console.log(`EVRY API on http://localhost:${port}/api`);
 }
