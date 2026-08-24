@@ -1,4 +1,5 @@
 import { Equipment, MuscleGroup } from '@prisma/client';
+import { NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ExercisesService } from './exercises.service';
 
@@ -140,5 +141,35 @@ describe('ExercisesService', () => {
         { equipment: Equipment.BARBELL },
       ]),
     );
+  });
+
+  it('only lists global non-custom exercises and custom exercises owned by the reader', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = {
+      exercise: { findMany, count: jest.fn().mockResolvedValue(0) },
+    } as unknown as PrismaService;
+    const service = new ExercisesService(prisma);
+
+    await service.list('usuario-1', {} as any);
+
+    const where = findMany.mock.calls[0][0].where;
+    expect(where.AND).toContainEqual({
+      OR: [
+        { ownerId: null, isCustom: false },
+        { ownerId: 'usuario-1', isCustom: true },
+      ],
+    });
+  });
+
+  it.each([
+    ['custom orphan', { ...sourceExercise, isCustom: true, ownerId: null }],
+    ['inconsistent owned non-custom', { ...sourceExercise, isCustom: false, ownerId: 'user-1' }],
+  ])('hides an invisible %s behind the same not found response', async (_kind, exercise) => {
+    const prisma = {
+      exercise: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+    const service = new ExercisesService(prisma);
+
+    await expect(service.getById('user-1', exercise.id)).rejects.toBeInstanceOf(NotFoundException);
   });
 });
