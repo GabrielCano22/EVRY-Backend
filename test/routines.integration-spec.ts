@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { RoutinesService } from '../src/modules/routines/routines.service';
 import { ServicioSesionActiva } from '../src/modules/workouts/servicio-sesion-activa';
 
-const TEST_DATABASE_URL = 'postgresql://evry_test_user@127.0.0.1:55432/evry_test?schema=public';
 const rollbackFunction = 'test_routine_exercise_rollback_failure';
 const rollbackTrigger = 'test_routine_exercise_rollback_trigger';
 
@@ -38,7 +37,8 @@ describe('RoutinesService PostgreSQL transaction rollback', () => {
   }
 
   beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toBe(TEST_DATABASE_URL);
+    expect(process.env.TEST_DATABASE_URL).toBeDefined();
+    expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL?.trim());
     await prisma.$connect();
     await removeRollbackTrigger();
   });
