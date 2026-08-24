@@ -91,6 +91,7 @@ describe('RoutinesService', () => {
   it.each([
     ['a series plan with a different length', { targetSets: 2, seriesPlan: [{ reps: 10 }] }],
     ['a negative target weight', { targetSets: 1, targetWeightKg: -0.5 }],
+    ['a negative series-plan weight', { targetSets: 1, seriesPlan: [{ weightKg: -0.5 }] }],
   ])('rejects %s before writing', async (_case, invalidExercise) => {
     const { prisma, service } = createService();
 
