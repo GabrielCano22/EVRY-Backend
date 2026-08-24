@@ -31,6 +31,30 @@ describe('release invariants schema and migration', () => {
     expect(migration).not.toContain('DELETE FROM "Workout"');
     expect(migration).not.toContain('DELETE FROM "WorkoutSet"');
     expect(migration).toContain('ROLLBACK NOTE');
-    expect(migration).toContain('COMMIT;');
+    expect(migration.match(/COMMIT;/g)).toHaveLength(1);
+    const postCommit = migration.slice(migration.indexOf('COMMIT;') + 'COMMIT;'.length);
+    const executablePostCommitLines = postCommit
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('--'));
+    expect(executablePostCommitLines).toEqual([]);
+    const rollbackSteps = [
+      '-- DROP INDEX IF EXISTS "Workout_userId_active_unique";',
+      '-- DROP INDEX IF EXISTS "Workout_userId_endedAt_id_idx";',
+      '-- DROP INDEX IF EXISTS "WorkoutSet_workoutId_clientMutationId_key";',
+      '-- DROP INDEX IF EXISTS "WorkoutSet_exerciseId_workoutId_completedAt_idx";',
+      '-- ALTER TABLE "Workout" DROP COLUMN IF EXISTS "cancelledAt";',
+      '-- ALTER TABLE "WorkoutSet" DROP COLUMN IF EXISTS "clientMutationId";',
+      '-- ALTER TABLE "WorkoutSet" DROP COLUMN IF EXISTS "techniqueStable";',
+    ];
+    const rollbackStart = migration.indexOf('ROLLBACK NOTE');
+    expect(rollbackStart).toBeGreaterThan(migration.indexOf('COMMIT;'));
+    expect(migration.slice(rollbackStart)).toContain('only manually, after a backup and a data-impact review');
+    rollbackSteps.forEach((step, index) => {
+      expect(migration).toContain(step);
+      if (index > 0) {
+        expect(migration.indexOf(step)).toBeGreaterThan(migration.indexOf(rollbackSteps[index - 1]));
+      }
+    });
   });
 });

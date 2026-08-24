@@ -67,8 +67,11 @@ COMMIT;
 
 -- ROLLBACK NOTE: only manually, after a backup and a data-impact review. Dropping
 -- these columns loses values collected after this migration; never run rollback automatically.
--- Manual rollback order: DROP INDEX IF EXISTS "Workout_userId_active_unique";
+-- Manual rollback order:
+-- DROP INDEX IF EXISTS "Workout_userId_active_unique";
 -- DROP INDEX IF EXISTS "Workout_userId_endedAt_id_idx";
 -- DROP INDEX IF EXISTS "WorkoutSet_workoutId_clientMutationId_key";
 -- DROP INDEX IF EXISTS "WorkoutSet_exerciseId_workoutId_completedAt_idx";
--- then optionally DROP COLUMN "cancelledAt", "clientMutationId", "techniqueStable".
+-- ALTER TABLE "Workout" DROP COLUMN IF EXISTS "cancelledAt";
+-- ALTER TABLE "WorkoutSet" DROP COLUMN IF EXISTS "clientMutationId";
+-- ALTER TABLE "WorkoutSet" DROP COLUMN IF EXISTS "techniqueStable";
