@@ -229,16 +229,22 @@ model CycleEntry {
 }
 
 model ExerciseStat {
-  userId        String
-  exerciseId    String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  exercise      Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-  estimated1RM  Float
-  bestWeight    Float
-  bestReps      Int
-  lastSetAt     DateTime
-  trendSlope    Float    @default(0)
-  sessionsCount Int      @default(0)
+  userId                String
+  exerciseId            String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise              Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  estimated1RM          Float
+  bestWeight            Float
+  bestReps              Int
+  lastSetAt             DateTime
+  trendSlope            Float    @default(0)
+  sessionsCount         Int      @default(0)
+  bestWeightAt          DateTime?
+  bestRepsWeightKg      Float?
+  bestRepsAt            DateTime?
+  estimated1RMAt        DateTime?
+  estimated1RMWeightKg  Float?
+  estimated1RMReps      Int?
 
   @@id([userId, exerciseId])
 }

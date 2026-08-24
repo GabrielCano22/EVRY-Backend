@@ -1,152 +1,259 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateSetDto, CreateWorkoutDto, FinishWorkoutDto, UpdateSetDto, UpdateWorkoutDto } from './dto/workout.dto';
-import { ServicioSesionActiva } from './servicio-sesion-activa';
+import { findVisibleExerciseOrThrow } from '../exercises/exercise-visibility';
+import {
+  CreateSetDto,
+  CreateWorkoutDto,
+  FinishWorkoutDto,
+  UpdateSetDto,
+  UpdateWorkoutDto,
+} from './dto/workout.dto';
+import { ExerciseStatsService } from './exercise-stats.service';
+import {
+  ServicioSesionActiva,
+  workoutDetailInclude,
+} from './servicio-sesion-activa';
+import {
+  lockWorkoutLifecycle,
+  runSerializableTransaction,
+} from './serializable-transaction';
+
+function uniqueConflictTargets(error: unknown): string[] | null {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return null;
+  }
+  const target = error.meta?.target;
+  return Array.isArray(target) ? target.map(String) : [String(target ?? '')];
+}
+
+function isSetMutationConflict(error: unknown): boolean {
+  const targets = uniqueConflictTargets(error);
+  if (!targets) return false;
+  return targets.includes('WorkoutSet_workoutId_clientMutationId_key')
+    || (targets.includes('workoutId') && targets.includes('clientMutationId'));
+}
 
 @Injectable()
 export class WorkoutsService {
   constructor(
     private prisma: PrismaService,
     private sesionActiva: ServicioSesionActiva,
+    private exerciseStats: ExerciseStatsService,
   ) {}
 
-  async create(userId: string, dto: CreateWorkoutDto) {
+  create(userId: string, dto: CreateWorkoutDto) {
     return this.sesionActiva.iniciarOContinuar(userId, dto);
   }
 
   list(userId: string, take = 20, skip = 0) {
     return this.prisma.workout.findMany({
       where: { userId },
-      orderBy: { startedAt: 'desc' },
-      include: { sets: { include: { exercise: true } } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      include: workoutDetailInclude,
       take,
       skip,
     });
   }
 
   async get(userId: string, id: string) {
-    const w = await this.prisma.workout.findUnique({
+    const workout = await this.prisma.workout.findUnique({
       where: { id },
-      include: {
-        sets: { include: { exercise: true }, orderBy: { order: 'asc' } },
-        routine: {
-          include: {
-            exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
-          },
+      include: workoutDetailInclude,
+    });
+    return this.requireOwnedWorkout(userId, workout);
+  }
+
+  update(userId: string, id: string, dto: UpdateWorkoutDto) {
+    return runSerializableTransaction(this.prisma, async (tx) => {
+      await lockWorkoutLifecycle(tx, userId);
+      const workout = this.requireOwnedWorkout(
+        userId,
+        await tx.workout.findUnique({ where: { id } }),
+      );
+      this.assertMutable(workout);
+      return tx.workout.update({
+        where: { id },
+        data: dto,
+        include: workoutDetailInclude,
+      });
+    });
+  }
+
+  finish(userId: string, id: string, dto: FinishWorkoutDto) {
+    return runSerializableTransaction(this.prisma, async (tx) => {
+      await lockWorkoutLifecycle(tx, userId);
+      const workout = this.requireOwnedWorkout(
+        userId,
+        await tx.workout.findUnique({
+          where: { id },
+          include: workoutDetailInclude,
+        }),
+      );
+      if (workout.cancelledAt) {
+        throw new BadRequestException('No puedes finalizar una sesión cancelada.');
+      }
+      if (workout.endedAt) return workout;
+
+      const hasUsefulSet = workout.sets.some(
+        ({ reps, durationS }) => (reps ?? 0) > 0 || (durationS ?? 0) > 0,
+      );
+      if (!hasUsefulSet) {
+        throw new BadRequestException('Registra al menos una serie útil antes de finalizar.');
+      }
+
+      const finished = await tx.workout.update({
+        where: { id },
+        data: {
+          endedAt: new Date(),
+          ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         },
-      },
+        include: workoutDetailInclude,
+      });
+      const exerciseIds = [...new Set(workout.sets.map(({ exerciseId }) => exerciseId))].sort();
+      await this.exerciseStats.rebuildExerciseStats(tx, userId, exerciseIds);
+      return finished;
     });
-    if (!w) throw new NotFoundException();
-    if (w.userId !== userId) throw new ForbiddenException();
-    return w;
   }
 
-  async update(userId: string, id: string, dto: UpdateWorkoutDto) {
-    await this.assertOwn(userId, id);
-    return this.prisma.workout.update({ where: { id }, data: dto });
-  }
+  cancel(userId: string, id: string) {
+    return runSerializableTransaction(this.prisma, async (tx) => {
+      await lockWorkoutLifecycle(tx, userId);
+      const workout = this.requireOwnedWorkout(
+        userId,
+        await tx.workout.findUnique({
+          where: { id },
+          include: workoutDetailInclude,
+        }),
+      );
+      if (workout.endedAt) {
+        throw new BadRequestException('No puedes cancelar una sesión finalizada.');
+      }
+      if (workout.cancelledAt) return workout;
 
-  async finish(userId: string, id: string, dto: FinishWorkoutDto) {
-    const workout = await this.assertOwn(userId, id);
-    if (workout.endedAt) return workout;
-
-    const finished = await this.prisma.workout.update({
-      where: { id },
-      data: { endedAt: new Date(), notes: dto.notes },
-      include: { sets: true },
+      return tx.workout.update({
+        where: { id },
+        data: { cancelledAt: new Date() },
+        include: workoutDetailInclude,
+      });
     });
-    await this.updateExerciseStats(userId, id);
-    return finished;
   }
 
-  async remove(userId: string, id: string) {
-    await this.assertOwn(userId, id);
-    await this.prisma.workout.delete({ where: { id } });
-    return { ok: true };
+  remove(userId: string, id: string) {
+    return runSerializableTransaction(this.prisma, async (tx) => {
+      await lockWorkoutLifecycle(tx, userId);
+      const workout = this.requireOwnedWorkout(
+        userId,
+        await tx.workout.findUnique({
+          where: { id },
+          include: { sets: { select: { exerciseId: true } } },
+        }),
+      );
+      if (!workout.endedAt && !workout.cancelledAt) {
+        throw new BadRequestException('Cancela una sesión activa en lugar de eliminarla.');
+      }
+
+      const exerciseIds = [...new Set(workout.sets.map(({ exerciseId }) => exerciseId))].sort();
+      await tx.workout.delete({ where: { id } });
+      await this.exerciseStats.rebuildExerciseStats(tx, userId, exerciseIds);
+      return { ok: true };
+    });
   }
 
   async addSet(userId: string, workoutId: string, dto: CreateSetDto) {
-    const workout = await this.assertOwn(userId, workoutId);
-    if (workout.endedAt) {
-      throw new BadRequestException('No puedes registrar series en una sesión finalizada.');
-    }
+    try {
+      return await runSerializableTransaction(this.prisma, async (tx) => {
+        await lockWorkoutLifecycle(tx, userId);
+        const workout = this.requireOwnedWorkout(
+          userId,
+          await tx.workout.findUnique({ where: { id: workoutId } }),
+        );
+        this.assertMutable(workout);
+        await findVisibleExerciseOrThrow(tx, userId, dto.exerciseId);
 
-    return this.prisma.workoutSet.create({
-      data: { workoutId, ...dto },
-      include: { exercise: true },
-    });
-  }
+        const uniqueKey = {
+          workoutId_clientMutationId: {
+            workoutId,
+            clientMutationId: dto.clientMutationId,
+          },
+        };
+        const existing = await tx.workoutSet.findUnique({
+          where: uniqueKey,
+          include: { exercise: true },
+        });
+        if (existing) return existing;
 
-  async updateSet(userId: string, setId: string, dto: UpdateSetDto) {
-    const set = await this.prisma.workoutSet.findUnique({
-      where: { id: setId },
-      include: { workout: true },
-    });
-    if (!set) throw new NotFoundException();
-    if (set.workout.userId !== userId) throw new ForbiddenException();
-    return this.prisma.workoutSet.update({ where: { id: setId }, data: dto });
-  }
-
-  async removeSet(userId: string, setId: string) {
-    const set = await this.prisma.workoutSet.findUnique({
-      where: { id: setId },
-      include: { workout: true },
-    });
-    if (!set) throw new NotFoundException();
-    if (set.workout.userId !== userId) throw new ForbiddenException();
-    await this.prisma.workoutSet.delete({ where: { id: setId } });
-    return { ok: true };
-  }
-
-  private async assertOwn(userId: string, workoutId: string) {
-    const w = await this.prisma.workout.findUnique({ where: { id: workoutId } });
-    if (!w) throw new NotFoundException();
-    if (w.userId !== userId) throw new ForbiddenException();
-    return w;
-  }
-
-  // Refresh per-exercise rolling stats: estimated 1RM (Epley), best, slope.
-  private async updateExerciseStats(userId: string, workoutId: string) {
-    const sets = await this.prisma.workoutSet.findMany({
-      where: { workoutId, isWarmup: false, weightKg: { not: null }, reps: { not: null } },
-    });
-    const grouped = new Map<string, typeof sets>();
-    for (const s of sets) {
-      const arr = grouped.get(s.exerciseId) ?? [];
-      arr.push(s);
-      grouped.set(s.exerciseId, arr);
-    }
-    for (const [exerciseId, list] of grouped) {
-      const top = list.reduce((acc, s) => {
-        const e1rm = (s.weightKg ?? 0) * (1 + (s.reps ?? 0) / 30);
-        return e1rm > acc.e1rm ? { e1rm, w: s.weightKg ?? 0, r: s.reps ?? 0 } : acc;
-      }, { e1rm: 0, w: 0, r: 0 });
-
-      const prev = await this.prisma.exerciseStat.findUnique({
-        where: { userId_exerciseId: { userId, exerciseId } },
+        return tx.workoutSet.create({
+          data: { workoutId, ...dto },
+          include: { exercise: true },
+        });
       });
-      const slope = prev ? top.e1rm - prev.estimated1RM : 0;
-
-      await this.prisma.exerciseStat.upsert({
-        where: { userId_exerciseId: { userId, exerciseId } },
-        create: {
-          userId, exerciseId,
-          estimated1RM: top.e1rm,
-          bestWeight: top.w,
-          bestReps: top.r,
-          lastSetAt: new Date(),
-          trendSlope: 0,
-          sessionsCount: 1,
+    } catch (error) {
+      if (!isSetMutationConflict(error)) throw error;
+      const canonical = await this.prisma.workoutSet.findUnique({
+        where: {
+          workoutId_clientMutationId: {
+            workoutId,
+            clientMutationId: dto.clientMutationId,
+          },
         },
-        update: {
-          estimated1RM: Math.max(prev?.estimated1RM ?? 0, top.e1rm),
-          bestWeight: Math.max(prev?.bestWeight ?? 0, top.w),
-          bestReps: top.r > (prev?.bestReps ?? 0) ? top.r : prev?.bestReps ?? top.r,
-          lastSetAt: new Date(),
-          trendSlope: slope,
-          sessionsCount: (prev?.sessionsCount ?? 0) + 1,
-        },
+        include: { exercise: true },
       });
+      if (!canonical) throw error;
+      return canonical;
+    }
+  }
+
+  updateSet(userId: string, setId: string, dto: UpdateSetDto) {
+    return runSerializableTransaction(this.prisma, async (tx) => {
+      await lockWorkoutLifecycle(tx, userId);
+      const set = await tx.workoutSet.findUnique({
+        where: { id: setId },
+        include: { workout: true },
+      });
+      if (!set) throw new NotFoundException();
+      const workout = this.requireOwnedWorkout(userId, set.workout);
+      this.assertMutable(workout);
+      return tx.workoutSet.update({
+        where: { id: setId },
+        data: dto,
+        include: { exercise: true },
+      });
+    });
+  }
+
+  removeSet(userId: string, setId: string) {
+    return runSerializableTransaction(this.prisma, async (tx) => {
+      await lockWorkoutLifecycle(tx, userId);
+      const set = await tx.workoutSet.findUnique({
+        where: { id: setId },
+        include: { workout: true },
+      });
+      if (!set) throw new NotFoundException();
+      const workout = this.requireOwnedWorkout(userId, set.workout);
+      this.assertMutable(workout);
+      await tx.workoutSet.delete({ where: { id: setId } });
+      return { ok: true };
+    });
+  }
+
+  private requireOwnedWorkout<T extends { userId: string }>(
+    userId: string,
+    workout: T | null,
+  ): T {
+    if (!workout) throw new NotFoundException();
+    if (workout.userId !== userId) throw new ForbiddenException();
+    return workout;
+  }
+
+  private assertMutable(workout: { endedAt: Date | null; cancelledAt: Date | null }): void {
+    if (workout.endedAt || workout.cancelledAt) {
+      throw new BadRequestException('La sesión ya no admite cambios.');
     }
   }
 }

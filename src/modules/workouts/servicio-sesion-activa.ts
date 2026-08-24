@@ -1,11 +1,37 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CycleService } from '../cycle/cycle.service';
 
-interface DatosNuevaSesion {
+export interface StartWorkoutInput {
   name: string;
   notes?: string;
   routineId?: string;
+}
+
+export const workoutDetailInclude = Prisma.validator<Prisma.WorkoutInclude>()({
+  sets: {
+    include: { exercise: true },
+    orderBy: [{ order: 'asc' }, { completedAt: 'asc' }, { id: 'asc' }],
+  },
+  routine: {
+    include: {
+      exercises: {
+        include: { exercise: true },
+        orderBy: [{ order: 'asc' }, { id: 'asc' }],
+      },
+    },
+  },
+});
+
+function isActiveWorkoutConflict(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return false;
+  }
+
+  const target = error.meta?.target;
+  const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')];
+  return fields.includes('userId') || fields.includes('Workout_userId_active_unique');
 }
 
 @Injectable()
@@ -15,16 +41,41 @@ export class ServicioSesionActiva {
     private ciclo: CycleService,
   ) {}
 
-  async iniciarOContinuar(userId: string, datos: DatosNuevaSesion) {
-    const activa = await this.prisma.workout.findFirst({
-      where: { userId, endedAt: null, cancelledAt: null },
-      orderBy: { startedAt: 'desc' },
-    });
-    if (activa) return activa;
+  async startOrResume(userId: string, input: StartWorkoutInput) {
+    const active = await this.findActive(userId);
+    if (active) return active;
 
-    const fase = await this.ciclo.currentPhase(userId).catch(() => null);
-    return this.prisma.workout.create({
-      data: { userId, ...datos, cyclePhase: fase ?? undefined },
+    if (input.routineId) {
+      const routine = await this.prisma.routine.findFirst({
+        where: { id: input.routineId, userId },
+        select: { id: true },
+      });
+      if (!routine) throw new NotFoundException();
+    }
+
+    const phase = await this.ciclo.currentPhase(userId).catch(() => null);
+    try {
+      return await this.prisma.workout.create({
+        data: { userId, ...input, cyclePhase: phase ?? undefined },
+        include: workoutDetailInclude,
+      });
+    } catch (error) {
+      if (!isActiveWorkoutConflict(error)) throw error;
+      const winner = await this.findActive(userId);
+      if (!winner) throw error;
+      return winner;
+    }
+  }
+
+  iniciarOContinuar(userId: string, input: StartWorkoutInput) {
+    return this.startOrResume(userId, input);
+  }
+
+  private findActive(userId: string) {
+    return this.prisma.workout.findFirst({
+      where: { userId, endedAt: null, cancelledAt: null },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      include: workoutDetailInclude,
     });
   }
 }
