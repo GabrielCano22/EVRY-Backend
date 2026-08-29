@@ -31,7 +31,9 @@ function isActiveWorkoutConflict(error: unknown): boolean {
 
   const target = error.meta?.target;
   const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')];
-  return fields.includes('userId') || fields.includes('Workout_userId_active_unique');
+  return fields.includes('userId')
+    || fields.includes('Workout_userId_active_unique')
+    || fields.includes('Workout_userId_status_active_unique');
 }
 
 @Injectable()
@@ -73,7 +75,7 @@ export class ServicioSesionActiva {
 
   private findActive(userId: string) {
     return this.prisma.workout.findFirst({
-      where: { userId, endedAt: null, cancelledAt: null },
+      where: { userId, status: 'ACTIVE' },
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       include: workoutDetailInclude,
     });

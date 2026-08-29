@@ -15,6 +15,7 @@ interface ApiErrorPayload {
   fieldErrors?: Record<string, string[]>;
   retryable: boolean;
   requestId: string;
+  serverVersion?: unknown;
 }
 
 interface NormalizedError extends Omit<ApiErrorPayload, 'requestId'> {
@@ -115,12 +116,18 @@ export class ApiExceptionFilter implements ExceptionFilter {
           && typeof (body as { message?: unknown }).message === 'string'
         ? String((body as { message: string }).message)
         : exception.message;
-    return this.error(
+    const normalized = this.error(
       status,
-      codeByStatus[status] ?? `HTTP_${status}`,
+      typeof body === 'object' && body !== null && typeof (body as { code?: unknown }).code === 'string'
+        ? String((body as { code: string }).code)
+        : codeByStatus[status] ?? `HTTP_${status}`,
       publicMessage,
       status === HttpStatus.SERVICE_UNAVAILABLE || status === HttpStatus.TOO_MANY_REQUESTS,
     );
+    if (typeof body === 'object' && body !== null && 'serverVersion' in body) {
+      return { ...normalized, serverVersion: (body as { serverVersion: unknown }).serverVersion };
+    }
+    return normalized;
   }
 
   private validationErrors(messages: string[]): Record<string, string[]> {

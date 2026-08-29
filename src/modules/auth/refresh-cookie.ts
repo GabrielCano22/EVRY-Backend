@@ -5,7 +5,7 @@ export function refreshCookieOptions(expiresAt?: Date): CookieOptions {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    path: '/api/auth',
+    path: '/api',
   };
 
   return expiresAt ? { ...options, expires: expiresAt } : options;

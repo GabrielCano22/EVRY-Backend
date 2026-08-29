@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { todayCivilDate } from '../../common/dates/civil-date';
 
 export interface CheckinDto {
   sleepHrs?: number;
@@ -12,18 +13,25 @@ export interface CheckinDto {
 export class ReadinessService {
   constructor(private prisma: PrismaService) {}
 
-  async checkin(userId: string, dto: CheckinDto) {
+  async checkin(userId: string, dto: CheckinDto, now: Date = new Date()) {
     const score = this.score(dto);
-    return this.prisma.readiness.create({
-      data: { userId, ...dto, score },
+    const civilDate = this.databaseCivilDate(now);
+    return this.prisma.readiness.upsert({
+      where: { userId_civilDate: { userId, civilDate } },
+      create: { userId, civilDate, ...dto, score },
+      update: { ...dto, score },
     });
   }
 
-  latest(userId: string) {
-    return this.prisma.readiness.findFirst({
-      where: { userId },
-      orderBy: { date: 'desc' },
+  latest(userId: string, now: Date = new Date()) {
+    const civilDate = this.databaseCivilDate(now);
+    return this.prisma.readiness.findUnique({
+      where: { userId_civilDate: { userId, civilDate } },
     });
+  }
+
+  private databaseCivilDate(now: Date): Date {
+    return new Date(`${todayCivilDate(undefined, now)}T00:00:00.000Z`);
   }
 
   // Score 0-100. Sleep weighted heaviest. Lower stress/soreness = higher.

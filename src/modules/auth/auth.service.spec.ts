@@ -75,4 +75,49 @@ describe('AuthService', () => {
     expect(tokens.accessToken).toBe('access-token');
     compare.mockReset();
   });
+
+  it('revoca toda la familia cuando se reutiliza un refresh token rotado', async () => {
+    const prisma = {
+      refreshToken: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'refresh-1',
+          familyId: '98b7e407-c9fe-4fde-8219-e5baead26c41',
+          platform: 'MOBILE',
+          revokedAt: new Date('2026-08-28T10:00:00.000Z'),
+          expiresAt: new Date('2026-09-28T10:00:00.000Z'),
+          user: { id: 'user-id', email: 'user@example.com' },
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+    };
+    const service = new AuthService(prisma as never, {} as never, {} as never);
+
+    await expect(service.refresh('reused-token', 'MOBILE')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { familyId: '98b7e407-c9fe-4fde-8219-e5baead26c41', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+
+  it('rechaza intercambiar refresh tokens entre web y móvil', async () => {
+    const prisma = {
+      refreshToken: {
+        findUnique: jest.fn().mockResolvedValue({
+          familyId: '98b7e407-c9fe-4fde-8219-e5baead26c41',
+          platform: 'WEB',
+          revokedAt: null,
+          expiresAt: new Date('2026-09-28T10:00:00.000Z'),
+          user: { id: 'user-id', email: 'user@example.com' },
+        }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const service = new AuthService(prisma as never, {} as never, {} as never);
+
+    await expect(service.refresh('web-token', 'MOBILE')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
 });

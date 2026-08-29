@@ -79,7 +79,7 @@ export class WorkoutsService {
       this.assertMutable(workout);
       return tx.workout.update({
         where: { id },
-        data: dto,
+        data: { ...dto, revision: { increment: 1 } },
         include: workoutDetailInclude,
       });
     });
@@ -111,6 +111,8 @@ export class WorkoutsService {
         where: { id },
         data: {
           endedAt: new Date(),
+          status: 'COMPLETED',
+          revision: { increment: 1 },
           ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         },
         include: workoutDetailInclude,
@@ -138,7 +140,7 @@ export class WorkoutsService {
 
       return tx.workout.update({
         where: { id },
-        data: { cancelledAt: new Date() },
+        data: { cancelledAt: new Date(), status: 'CANCELLED', revision: { increment: 1 } },
         include: workoutDetailInclude,
       });
     });
@@ -221,7 +223,7 @@ export class WorkoutsService {
       this.assertMutable(workout);
       return tx.workoutSet.update({
         where: { id: setId },
-        data: dto,
+        data: { ...dto, revision: { increment: 1 } },
         include: { exercise: true },
       });
     });

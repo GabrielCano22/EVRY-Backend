@@ -1,6 +1,7 @@
 import { BadRequestException, HttpStatus } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ApiExceptionFilter } from './api-exception.filter';
+import { RevisionConflictException } from '../../modules/sync/revision-conflict.exception';
 
 function responseHost(requestId = '0c73ce04-63c5-49df-9464-31d88a476e20') {
   const response = {
@@ -76,5 +77,21 @@ describe('ApiExceptionFilter', () => {
       retryable: false,
     });
     expect(JSON.stringify(response.json.mock.calls)).not.toContain('JWT super secret');
+  });
+
+  it('incluye la versión canónica en conflictos de sincronización', () => {
+    const { host, response } = responseHost();
+    const serverVersion = { id: 'server-workout', revision: 7 };
+
+    new ApiExceptionFilter().catch(new RevisionConflictException(serverVersion), host);
+
+    expect(response.status).toHaveBeenCalledWith(HttpStatus.CONFLICT);
+    expect(response.json).toHaveBeenCalledWith({
+      code: 'REVISION_CONFLICT',
+      message: 'La versión del servidor cambió. Revisa el conflicto antes de continuar.',
+      requestId: '0c73ce04-63c5-49df-9464-31d88a476e20',
+      retryable: false,
+      serverVersion,
+    });
   });
 });

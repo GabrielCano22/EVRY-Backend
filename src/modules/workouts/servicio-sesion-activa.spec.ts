@@ -59,6 +59,9 @@ describe('ServicioSesionActiva', () => {
     expect(prisma.routine.findFirst).not.toHaveBeenCalled();
     expect(cycle.currentPhase).not.toHaveBeenCalled();
     expect(prisma.workout.create).not.toHaveBeenCalled();
+    expect(prisma.workout.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 'user-1', status: 'ACTIVE' },
+    }));
   });
 
   it('validates routine ownership and creates a workout with the current phase', async () => {
@@ -106,6 +109,17 @@ describe('ServicioSesionActiva', () => {
     await expect(service.iniciarOContinuar('user-1', { name: 'Concurrent start' }))
       .resolves.toBe(winner);
     expect(prisma.workout.findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it('recognizes the status-based partial unique index as an active-workout race', async () => {
+    const winner = { id: 'race-winner', userId: 'user-1', status: 'ACTIVE' };
+    const { service } = makeService({
+      createError: uniqueError(['Workout_userId_status_active_unique']),
+      activeAfterConflict: winner,
+    });
+
+    await expect(service.iniciarOContinuar('user-1', { name: 'Concurrent start' }))
+      .resolves.toBe(winner);
   });
 
   it('rethrows an expected unique error when no canonical active workout exists', async () => {

@@ -14,6 +14,7 @@ import { ReadinessModule } from './modules/readiness/readiness.module';
 import { RoutinesModule } from './modules/routines/routines.module';
 import { validateEnvironment } from './config/environment';
 import { HealthModule } from './health/health.module';
+import { SyncModule } from './modules/sync/sync.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { HealthModule } from './health/health.module';
     ReadinessModule,
     RoutinesModule,
     HealthModule,
+    SyncModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

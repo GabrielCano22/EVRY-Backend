@@ -10,14 +10,14 @@ describe('refreshCookieOptions', () => {
       httpOnly: true,
       sameSite: 'lax',
       secure: false,
-      path: '/api/auth',
+      path: '/api',
       expires: expiresAt,
     });
     expect(clearOptions).toMatchObject({
       httpOnly: true,
       sameSite: 'lax',
       secure: false,
-      path: '/api/auth',
+      path: '/api',
     });
     expect(clearOptions).not.toHaveProperty('expires');
   });
