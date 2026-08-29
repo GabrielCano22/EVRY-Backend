@@ -11,8 +11,9 @@ import {
   configuredCorsOrigins,
   registerExerciseMedia,
 } from './media/exercise-media.middleware';
-import { PrismaConnectionExceptionFilter } from './common/filters/prisma-connection-exception.filter';
-import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter';
+import { legacyApiAliasMiddleware } from './common/http/api-version.middleware';
+import { requestIdMiddleware } from './common/http/request-id.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -21,6 +22,8 @@ async function bootstrap() {
 
   app.use(helmet());
   app.use(cookieParser());
+  app.use(requestIdMiddleware);
+  app.use(legacyApiAliasMiddleware);
   const corsOrigins = configuredCorsOrigins(process.env.CORS_ORIGIN);
   // __dirname apunta a dist/ al ejecutar la versión compilada; de esta forma
   // los GIF y JPG se sirven aunque el proceso se inicie desde otra carpeta.
@@ -33,20 +36,16 @@ async function bootstrap() {
     exposedHeaders: ['Content-Length', 'ETag'],
   });
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api/v1');
   const httpServer = app.getHttpAdapter().getInstance();
   httpServer.get('/', (_request: Request, response: Response) =>
     response.status(200).json({
       nombre: 'EVRY API',
       estado: 'ok',
-      api: '/api',
+      api: '/api/v1',
       ...(swaggerEnabled ? { documentacion: '/docs' } : {}),
     }),
   );
-  httpServer.get('/health', (_request: Request, response: Response) =>
-    response.status(200).json({ estado: 'ok' }),
-  );
-
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -54,16 +53,13 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.useGlobalFilters(
-    new PrismaExceptionFilter(),
-    new PrismaConnectionExceptionFilter(),
-  );
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   if (swaggerEnabled) {
     const config = new DocumentBuilder()
       .setTitle('EVRY API')
       .setDescription('Aplicación de entrenamiento adaptativo con integración del ciclo hormonal')
-      .setVersion('0.1')
+      .setVersion('1.0')
       .addBearerAuth()
       .build();
     const doc = SwaggerModule.createDocument(app, config);
@@ -72,6 +68,6 @@ async function bootstrap() {
 
   const port = configService.getOrThrow<number>('PORT');
   await app.listen(port);
-  console.log(`EVRY API on http://localhost:${port}/api`);
+  console.log(`EVRY API on http://localhost:${port}/api/v1`);
 }
 bootstrap();

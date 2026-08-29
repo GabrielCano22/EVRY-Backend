@@ -13,6 +13,7 @@ import { AdaptiveModule } from './modules/adaptive/adaptive.module';
 import { ReadinessModule } from './modules/readiness/readiness.module';
 import { RoutinesModule } from './modules/routines/routines.module';
 import { validateEnvironment } from './config/environment';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { validateEnvironment } from './config/environment';
     AdaptiveModule,
     ReadinessModule,
     RoutinesModule,
+    HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
