@@ -7,7 +7,10 @@ import cookieParser from 'cookie-parser';
 import { join } from 'node:path';
 import type { Request, Response } from 'express';
 import { AppModule } from './app.module';
-import { registerExerciseMedia } from './media/exercise-media.middleware';
+import {
+  configuredCorsOrigins,
+  registerExerciseMedia,
+} from './media/exercise-media.middleware';
 import { PrismaConnectionExceptionFilter } from './common/filters/prisma-connection-exception.filter';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
@@ -18,18 +21,16 @@ async function bootstrap() {
 
   app.use(helmet());
   app.use(cookieParser());
+  const corsOrigins = configuredCorsOrigins(process.env.CORS_ORIGIN);
   // __dirname apunta a dist/ al ejecutar la versión compilada; de esta forma
   // los GIF y JPG se sirven aunque el proceso se inicie desde otra carpeta.
-  registerExerciseMedia(app, join(__dirname, '..', 'assets', 'exercises'));
+  registerExerciseMedia(app, join(__dirname, '..', 'assets', 'exercises'), {
+    allowedOrigins: corsOrigins,
+  });
   app.enableCors({
-    origin: [
-      ...(process.env.CORS_ORIGIN ?? 'http://localhost:3000')
-        .split(',')
-        .map((origin) => origin.trim())
-        .filter(Boolean),
-      'http://127.0.0.1:3000',
-    ],
+    origin: corsOrigins,
     credentials: true,
+    exposedHeaders: ['Content-Length', 'ETag'],
   });
 
   app.setGlobalPrefix('api');
