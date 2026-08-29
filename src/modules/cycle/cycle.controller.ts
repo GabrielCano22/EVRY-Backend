@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CycleService } from './cycle.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
@@ -22,5 +22,10 @@ export class CycleController {
   @Get('today')
   today(@CurrentUser() u: AuthUser) {
     return this.svc.phaseInfo(u.id);
+  }
+
+  @Delete('entries/:id')
+  remove(@CurrentUser() u: AuthUser, @Param('id') id: string) {
+    return this.svc.removeEntry(u.id, id);
   }
 }

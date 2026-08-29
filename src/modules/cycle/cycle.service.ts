@@ -1,13 +1,19 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { CyclePhase } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpsertCycleEntryDto } from './dto/cycle.dto';
+import {
+  assertCivilDateRange,
+  CivilDate,
+  parseCivilDate,
+  todayCivilDate,
+} from '../../common/dates/civil-date';
 
 export interface PhaseInfo {
   phase: CyclePhase;
   dayOfCycle: number;
   cycleLength: number;
-  nextPeriodStart: Date | null;
+  nextPeriodStart: CivilDate | null;
   trainingHint: string;
   intensityCap: number; // 0-1 multiplier suggestion
   volumeCap: number;
@@ -17,10 +23,16 @@ export interface PhaseInfo {
 export class CycleService {
   constructor(private prisma: PrismaService) {}
 
-  async upsertEntry(userId: string, dto: UpsertCycleEntryDto) {
+  async upsertEntry(userId: string, dto: UpsertCycleEntryDto, now: Date = new Date()) {
+    await this.assertOptIn(userId);
     const { date: dateStr, previousDate: previousDateStr, ...rest } = dto;
-    const date = new Date(dateStr);
-    const previousDate = previousDateStr ? new Date(previousDateStr) : null;
+    const today = todayCivilDate(undefined, now);
+    const dateLabel = this.civilDate(dateStr);
+    assertCivilDateRange(dateLabel, dateLabel, today);
+    const date = this.databaseDate(dateLabel);
+    const previousDateLabel = previousDateStr ? this.civilDate(previousDateStr) : null;
+    if (previousDateLabel) assertCivilDateRange(previousDateLabel, previousDateLabel, today);
+    const previousDate = previousDateLabel ? this.databaseDate(previousDateLabel) : null;
 
     const guardar = (client: Pick<PrismaService, 'cycleEntry'>) =>
       client.cycleEntry.upsert({
@@ -42,18 +54,31 @@ export class CycleService {
     return guardar(this.prisma);
   }
 
-  list(userId: string, from?: string, to?: string) {
+  async list(userId: string, from?: string, to?: string, now: Date = new Date()) {
+    await this.assertOptIn(userId);
+    const today = todayCivilDate(undefined, now);
+    const fromLabel = from ? this.civilDate(from) : undefined;
+    const toLabel = to ? this.civilDate(to) : today;
+    if (fromLabel) assertCivilDateRange(fromLabel, toLabel, today);
+    else assertCivilDateRange(toLabel, toLabel, today);
     return this.prisma.cycleEntry.findMany({
       where: {
         userId,
         date: {
-          gte: from ? new Date(from) : undefined,
-          lte: to ? new Date(to) : undefined,
+          gte: fromLabel ? this.databaseDate(fromLabel) : undefined,
+          lte: to ? this.databaseDate(toLabel) : undefined,
         },
       },
       orderBy: { date: 'desc' },
       take: 180,
     });
+  }
+
+  async removeEntry(userId: string, id: string) {
+    await this.assertOptIn(userId);
+    const result = await this.prisma.cycleEntry.deleteMany({ where: { id, userId } });
+    if (result.count !== 1) throw new NotFoundException();
+    return { ok: true };
   }
 
   async currentPhase(userId: string): Promise<CyclePhase | null> {
@@ -73,13 +98,13 @@ export class CycleService {
     if (lastStarts.length === 0) return null;
 
     const cycleLen = this.computeCycleLength(lastStarts.map((e) => e.date), user.avgCycleLen);
-    const lastStart = lastStarts[0].date;
-    const today = startOfDay(new Date());
-    const day = Math.floor((today.getTime() - startOfDay(lastStart).getTime()) / 86400000) + 1;
+    const lastStart = this.databaseDateLabel(lastStarts[0].date);
+    const today = todayCivilDate();
+    const day = this.dayDifference(lastStart, today) + 1;
     const dayOfCycle = ((day - 1) % cycleLen) + 1;
 
     const phase = this.phaseOf(dayOfCycle, cycleLen, user.avgPeriodLen);
-    const nextPeriodStart = new Date(startOfDay(lastStart).getTime() + cycleLen * 86400000);
+    const nextPeriodStart = this.addCivilDays(lastStart, cycleLen);
 
     const hint = this.trainingHint(phase);
     return {
@@ -95,10 +120,10 @@ export class CycleService {
 
   private computeCycleLength(starts: Date[], fallback: number): number {
     if (starts.length < 2) return fallback;
-    const sorted = [...starts].sort((a, b) => a.getTime() - b.getTime());
+    const sorted = starts.map((date) => this.databaseDateLabel(date)).sort();
     const diffs: number[] = [];
     for (let i = 1; i < sorted.length; i++) {
-      diffs.push(Math.round((sorted[i].getTime() - sorted[i - 1].getTime()) / 86400000));
+      diffs.push(this.dayDifference(sorted[i - 1], sorted[i]));
     }
     diffs.sort((a, b) => a - b);
     const median = diffs[Math.floor(diffs.length / 2)];
@@ -117,19 +142,46 @@ export class CycleService {
   private trainingHint(phase: CyclePhase) {
     switch (phase) {
       case 'MENSTRUAL':
-        return { text: 'Energía baja posible. Movilidad, técnica, cardio suave. RPE ≤ 7.', intensityCap: 0.85, volumeCap: 0.85 };
+        return { text: 'El contexto y la energía pueden variar; ajusta por sensaciones.', intensityCap: 1, volumeCap: 1 };
       case 'FOLLICULAR':
-        return { text: 'Pico de fuerza y recuperación. Buen momento para buscar marcas personales e intensidad alta.', intensityCap: 1.05, volumeCap: 1.0 };
+        return { text: 'Usa tus sesiones recientes y tu readiness para decidir la carga.', intensityCap: 1, volumeCap: 1 };
       case 'OVULATION':
-        return { text: 'Máximo rendimiento neuromuscular. Prioriza ejercicios compuestos.', intensityCap: 1.05, volumeCap: 1.0 };
+        return { text: 'Este dato es estimado y no implica un pico de rendimiento.', intensityCap: 1, volumeCap: 1 };
       case 'LUTEAL':
-        return { text: 'Energía variable. Volumen moderado, evita llegar al fallo. RPE ≤ 8.', intensityCap: 0.95, volumeCap: 0.9 };
+        return { text: 'La energía puede variar; prioriza tu respuesta individual.', intensityCap: 1, volumeCap: 1 };
     }
   }
-}
 
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
+  private async assertOptIn(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { trackCycle: true },
+    });
+    if (!user?.trackCycle) {
+      throw new BadRequestException('Activa voluntariamente el seguimiento del ciclo para usar esta función.');
+    }
+  }
+
+  private civilDate(value: string): CivilDate {
+    parseCivilDate(value);
+    return value as CivilDate;
+  }
+
+  private databaseDate(value: CivilDate): Date {
+    return new Date(`${value}T00:00:00.000Z`);
+  }
+
+  private databaseDateLabel(value: Date): CivilDate {
+    return value.toISOString().slice(0, 10) as CivilDate;
+  }
+
+  private dayDifference(from: CivilDate, to: CivilDate): number {
+    return Math.round((this.databaseDate(to).getTime() - this.databaseDate(from).getTime()) / 86400000);
+  }
+
+  private addCivilDays(value: CivilDate, days: number): CivilDate {
+    const result = this.databaseDate(value);
+    result.setUTCDate(result.getUTCDate() + days);
+    return this.databaseDateLabel(result);
+  }
 }
