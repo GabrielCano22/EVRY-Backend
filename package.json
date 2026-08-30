@@ -32,6 +32,7 @@
     "lint:fix": "eslint \"{src,test,scripts}/**/*.ts\" --fix",
     "test:unit": "cross-env TZ=America/Bogota NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
     "test:integration": "cross-env TZ=America/Bogota NODE_OPTIONS=--experimental-vm-modules jest --config test/jest-integration.json --runInBand",
+    "test:type-check": "tsc --noEmit -p tsconfig.spec.json",
     "test:db:migrate": "ts-node scripts/migrate-test-database.ts"
   },
   "dependencies": {

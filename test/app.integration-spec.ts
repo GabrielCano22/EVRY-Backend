@@ -108,7 +108,7 @@ describe('release invariants database migration', () => {
     ).rejects.toMatchObject({ code: 'P2002' });
     await expect(
       prisma.workout.create({
-        data: { userId, name: 'Cancelled workout', cancelledAt: new Date() },
+        data: { userId, name: 'Cancelled workout', status: 'CANCELLED', cancelledAt: new Date() },
       }),
     ).resolves.toMatchObject({ cancelledAt: expect.any(Date) });
   });

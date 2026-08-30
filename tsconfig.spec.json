@@ -3,8 +3,10 @@
   "compilerOptions": {
     "module": "ES2022",
     "moduleResolution": "bundler",
+    "rootDir": ".",
     "noEmit": true,
     "types": ["node", "jest"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -44,6 +44,7 @@ jobs:
       - run: npm run prisma:generate
       - run: npm run openapi:check
       - run: npm run lint:check
+      - run: npm run test:type-check
       - run: npm run build
       - run: npm run test:unit
       - run: npm run test:db:migrate
