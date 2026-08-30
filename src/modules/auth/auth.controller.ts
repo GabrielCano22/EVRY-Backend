@@ -1,5 +1,4 @@
 import { Body, Controller, Post, Req, Res, UseGuards, HttpCode, Get } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -7,6 +6,7 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { refreshCookieOptions } from './refresh-cookie';
+import { RateLimit } from '../../common/rate-limit/rate-limit.decorator';
 
 const REFRESH_COOKIE = 'evry_refresh';
 
@@ -15,7 +15,7 @@ export class AuthController {
   constructor(private auth: AuthService) {}
 
   @Post('register')
-  @Throttle({ default: { ttl: 60_000, limit: 3 } })
+  @RateLimit(3)
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.auth.register(dto);
     this.setRefreshCookie(res, tokens.refreshToken, tokens.expiresAt);
@@ -24,7 +24,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  @Throttle({ default: { ttl: 60_000, limit: 5 } })
+  @RateLimit(5)
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.auth.login(dto);
     this.setRefreshCookie(res, tokens.refreshToken, tokens.expiresAt);
@@ -33,7 +33,7 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(200)
-  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @RateLimit(10)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = req.cookies?.[REFRESH_COOKIE];
     const tokens = await this.auth.refresh(token);

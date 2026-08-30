@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -15,14 +14,11 @@ import { RoutinesModule } from './modules/routines/routines.module';
 import { validateEnvironment } from './config/environment';
 import { HealthModule } from './health/health.module';
 import { SyncModule } from './modules/sync/sync.module';
+import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
-    ThrottlerModule.forRoot({
-      throttlers: [{ ttl: 60_000, limit: 100 }],
-      errorMessage: 'Demasiadas solicitudes. Inténtalo más tarde.',
-    }),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -36,6 +32,6 @@ import { SyncModule } from './modules/sync/sync.module';
     HealthModule,
     SyncModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: RateLimitGuard }],
 })
 export class AppModule {}

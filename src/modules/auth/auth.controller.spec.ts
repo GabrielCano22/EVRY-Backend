@@ -1,4 +1,4 @@
-import { THROTTLER_LIMIT, THROTTLER_TTL } from '@nestjs/throttler/dist/throttler.constants';
+import { RATE_LIMIT_METADATA } from '../../common/rate-limit/rate-limit.decorator';
 import { AuthController } from './auth.controller';
 import { MobileAuthController } from './mobile-auth.controller';
 
@@ -11,8 +11,10 @@ describe('AuthController rate limits', () => {
     const descriptor = Object.getOwnPropertyDescriptor(AuthController.prototype, handler);
 
     expect(descriptor).toBeDefined();
-    expect(Reflect.getMetadata(`${THROTTLER_LIMIT}default`, descriptor!.value)).toBe(limit);
-    expect(Reflect.getMetadata(`${THROTTLER_TTL}default`, descriptor!.value)).toBe(60_000);
+    expect(Reflect.getMetadata(RATE_LIMIT_METADATA, descriptor!.value)).toEqual({
+      limit,
+      ttlMs: 60_000,
+    });
   });
 });
 
