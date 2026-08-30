@@ -21,7 +21,7 @@ export class ProgressController {
     return this.svc.activity(u.id, query);
   }
 
-  @Get('exercise/:id')
+  @Get(['exercises/:id', 'exercise/:id'])
   exerciseProgress(
     @CurrentUser() u: AuthUser,
     @Param('id') id: string,

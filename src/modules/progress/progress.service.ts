@@ -81,23 +81,20 @@ export class ProgressService {
     query: OverviewQueryDto,
   ): Promise<ProgressOverviewResponse> {
     const period = resolveProgressPeriod(query.period);
-    if (!period.from || !period.previous) {
-      throw new RangeError('El resumen exige un periodo finito.');
-    }
     return this.prisma.$transaction(async (tx) => {
       const result = await this.repository.getOverview(tx, userId, period);
       return {
         period: {
-          key: '30d',
-          from: period.from as `${number}-${number}-${number}`,
+          key: period.key,
+          from: period.from,
           to: period.to,
           timezone: period.timezone,
         },
         summary: result.current,
-        comparison: {
+        comparison: result.previous ? {
           previous: result.previous,
           delta: deltaOverviewMetrics(result.current, result.previous),
-        },
+        } : null,
         records: result.records,
         muscleDistribution: result.muscleDistribution,
       };

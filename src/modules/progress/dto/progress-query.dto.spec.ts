@@ -40,10 +40,13 @@ describe('progress query DTOs', () => {
     )).rejects.toMatchObject({ status: 400 });
   });
 
-  it('only accepts the explicit 30d overview period', async () => {
+  it('accepts every documented overview period and rejects unknown values', async () => {
     await expect(errorsFor(OverviewQueryDto, {})).resolves.toHaveLength(0);
     expect(plainToInstance(OverviewQueryDto, {})).toMatchObject({ period: '30d' });
-    await expect(errorsFor(OverviewQueryDto, { period: '90d' })).resolves.not.toHaveLength(0);
+    for (const period of ['30d', '90d', '6m', '1y', 'all']) {
+      await expect(errorsFor(OverviewQueryDto, { period })).resolves.toHaveLength(0);
+    }
+    await expect(errorsFor(OverviewQueryDto, { period: 'week' })).resolves.not.toHaveLength(0);
   });
 
   it.each([

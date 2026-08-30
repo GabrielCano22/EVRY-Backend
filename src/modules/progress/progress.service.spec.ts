@@ -214,6 +214,20 @@ describe('ProgressService', () => {
     );
   });
 
+  it('returns an all-time overview without inventing a previous-period comparison', async () => {
+    repository.getOverview.mockResolvedValue({
+      current: { sessionsCompleted: 4, volumeKg: 1200, activeDays: 3, weeklyFrequency: 0.93 },
+      previous: null,
+      records: [],
+      muscleDistribution: [],
+    });
+
+    const result = await service.overview('user-1', { period: 'all' });
+
+    expect(result.period).toMatchObject({ key: 'all', from: null });
+    expect(result.comparison).toBeNull();
+  });
+
   it('validates activity ranges as HTTP 400 before opening a snapshot', async () => {
     await expect(
       service.activity('user-1', { from: '2026-01-01', to: '2026-03-04' }),

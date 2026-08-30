@@ -145,13 +145,13 @@ export interface ExerciseProgressResponse {
 
 export interface ProgressOverviewResponse {
   period: {
-    key: '30d';
-    from: CivilDate;
+    key: ProgressPeriod;
+    from: CivilDate | null;
     to: CivilDate;
     timezone: 'America/Bogota';
   };
   summary: OverviewMetrics;
-  comparison: { previous: OverviewMetrics; delta: OverviewMetrics };
+  comparison: { previous: OverviewMetrics; delta: OverviewMetrics } | null;
   records: Array<{
     exerciseId: string;
     exerciseName: string;

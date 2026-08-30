@@ -34,7 +34,7 @@ export interface ExerciseProgressRepositoryResult {
 
 export interface OverviewRepositoryResult {
   current: OverviewMetrics;
-  previous: OverviewMetrics;
+  previous: OverviewMetrics | null;
   records: Array<{
     exerciseId: string;
     exerciseName: string;
@@ -107,6 +107,7 @@ type OverviewMetricRow = {
   sessionsCompleted: bigint;
   volumeKg: number;
   activeDays: bigint;
+  firstCompletedAt: Date | null;
 };
 
 type OverviewRecordRow = {
@@ -478,14 +479,22 @@ export class ProgressRepository {
         ) FROM eligible_set), 0)::double precision AS "volumeKg",
         (SELECT COUNT(DISTINCT (
           ("endedAt" AT TIME ZONE 'UTC') AT TIME ZONE ${APP_TIME_ZONE}
-        )::date) FROM completed_workout) AS "activeDays"
+        )::date) FROM completed_workout) AS "activeDays",
+        (SELECT MIN("endedAt") FROM completed_workout) AS "firstCompletedAt"
     `);
     const sessionsCompleted = Number(row?.sessionsCompleted ?? 0n);
+    const effectiveFrom = row?.firstCompletedAt && row.firstCompletedAt > fromInclusive
+      ? row.firstCompletedAt
+      : fromInclusive;
+    const periodDays = Math.max(
+      1,
+      Math.ceil((toExclusive.getTime() - effectiveFrom.getTime()) / 86_400_000),
+    );
     return {
       sessionsCompleted,
       volumeKg: roundMetric(Number(row?.volumeKg ?? 0)),
       activeDays: Number(row?.activeDays ?? 0n),
-      weeklyFrequency: roundMetric(sessionsCompleted * 7 / 30),
+      weeklyFrequency: roundMetric(sessionsCompleted * 7 / periodDays),
     };
   }
 
@@ -494,16 +503,16 @@ export class ProgressRepository {
     userId: string,
     period: ProgressPeriodWindow,
   ): Promise<OverviewRepositoryResult> {
-    if (!period.fromInclusive || !period.previous) {
-      throw new RangeError('El resumen exige un periodo finito.');
-    }
-    const current = await this.overviewMetrics(tx, userId, period.fromInclusive, period.toExclusive);
-    const previous = await this.overviewMetrics(
-      tx,
-      userId,
-      period.previous.fromInclusive,
-      period.previous.toExclusive,
-    );
+    const fromInclusive = period.fromInclusive ?? new Date(0);
+    const current = await this.overviewMetrics(tx, userId, fromInclusive, period.toExclusive);
+    const previous = period.previous
+      ? await this.overviewMetrics(
+        tx,
+        userId,
+        period.previous.fromInclusive,
+        period.previous.toExclusive,
+      )
+      : null;
     const recordRows = await tx.$queryRaw<OverviewRecordRow[]>(Prisma.sql`
       SELECT * FROM (
         SELECT
@@ -515,7 +524,7 @@ export class ProgressRepository {
         FROM "ExerciseStat" s
         JOIN "Exercise" e ON e."id" = s."exerciseId"
         WHERE s."userId" = ${userId}
-          AND s."bestWeightAt" >= ${period.fromInclusive}
+          AND s."bestWeightAt" >= ${fromInclusive}
           AND s."bestWeightAt" < ${period.toExclusive}
         UNION ALL
         SELECT
@@ -524,7 +533,7 @@ export class ProgressRepository {
         FROM "ExerciseStat" s
         JOIN "Exercise" e ON e."id" = s."exerciseId"
         WHERE s."userId" = ${userId}
-          AND s."bestRepsAt" >= ${period.fromInclusive}
+          AND s."bestRepsAt" >= ${fromInclusive}
           AND s."bestRepsAt" < ${period.toExclusive}
         UNION ALL
         SELECT
@@ -533,7 +542,7 @@ export class ProgressRepository {
         FROM "ExerciseStat" s
         JOIN "Exercise" e ON e."id" = s."exerciseId"
         WHERE s."userId" = ${userId}
-          AND s."estimated1RMAt" >= ${period.fromInclusive}
+          AND s."estimated1RMAt" >= ${fromInclusive}
           AND s."estimated1RMAt" < ${period.toExclusive}
       ) records
       ORDER BY "achievedAt" DESC, "exerciseId" ASC, "kind" ASC
@@ -545,7 +554,7 @@ export class ProgressRepository {
         WHERE w."userId" = ${userId}
           AND w."endedAt" IS NOT NULL
           AND w."cancelledAt" IS NULL
-          AND w."endedAt" >= ${period.fromInclusive}
+          AND w."endedAt" >= ${fromInclusive}
           AND w."endedAt" < ${period.toExclusive}
       )
       SELECT e."muscleGroup" AS "muscleGroup", COUNT(*) AS "workingSets"
