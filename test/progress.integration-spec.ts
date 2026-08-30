@@ -97,6 +97,7 @@ describe('progress HTTP/PostgreSQL', () => {
         startedAt: addMilliseconds(anchor, -3_600_000),
         endedAt,
         cancelledAt,
+        status: cancelledAt ? 'CANCELLED' : endedAt ? 'COMPLETED' : 'ACTIVE',
       },
     });
     for (const [index, item] of sets.entries()) {
@@ -369,7 +370,7 @@ describe('progress HTTP/PostgreSQL', () => {
     expect(first.body.history.items[0].sets.map((set: { order: number }) => set.order)).toEqual([0, 1]);
     expect(second.body.history.items[0].workoutId).toBe(currentWorkoutOneId);
     expect(second.body.history.items[0].sets.map((set: { order: number }) => set.order)).toEqual([0, 1]);
-    expect(empty.body.history).toEqual({ items: [], page: 3, limit: 1, total: 2, hasMore: false });
+    expect(empty.body.history).toEqual({ items: [], page: 3, limit: 1, total: 2, hasMore: false, nextCursor: null });
   });
 
   it.each([
@@ -391,6 +392,31 @@ describe('progress HTTP/PostgreSQL', () => {
       expect(response.body.comparison).toBeNull();
       expect(response.body.summary.bestWeight.weightKg).toBe(110);
     }
+  });
+
+  it('uses cursors across tied timestamps without repeating sessions when a newer one arrives', async () => {
+    const actor = await createUser('cursor');
+    const endedAt = new Date('2026-08-20T12:00:00.000Z');
+    const set = { exercise: globalExercise, values: { reps: 8, weightKg: 40 } };
+    const ids = [
+      await createWorkout(actor, 'cursor-a', endedAt, [set]),
+      await createWorkout(actor, 'cursor-b', endedAt, [set]),
+      await createWorkout(actor, 'cursor-c', endedAt, [set]),
+    ].sort().reverse();
+    const path = `/api/progress/exercises/${globalExercise.id}?period=all&limit=1`;
+    const first = await get(path, actor);
+    expect(first.status).toBe(200);
+    expect(first.body.history.items[0].workoutId).toBe(ids[0]);
+    await createWorkout(actor, 'cursor-new', new Date('2026-08-21T12:00:00.000Z'), [set]);
+    const second = await get(`${path}&cursor=${encodeURIComponent(first.body.history.nextCursor)}`, actor);
+    const third = await get(`${path}&cursor=${encodeURIComponent(second.body.history.nextCursor)}`, actor);
+    expect(second.status).toBe(200);
+    expect(third.status).toBe(200);
+    expect(second.body.history).toMatchObject({ page: null, hasMore: true });
+    expect(second.body.history.items[0].workoutId).toBe(ids[1]);
+    expect(third.body.history.items[0].workoutId).toBe(ids[2]);
+    expect(third.body.history).toMatchObject({ hasMore: false, nextCursor: null });
+    expect((await get(`${path}&cursor=invalid`, actor)).status).toBe(400);
   });
 
   it('aggregates overview in the 30-day window and only exposes records achieved there', async () => {

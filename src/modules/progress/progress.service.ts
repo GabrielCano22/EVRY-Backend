@@ -7,6 +7,7 @@ import type { ExerciseProgressQueryDto } from './dto/exercise-progress-query.dto
 import type { OverviewQueryDto } from './dto/overview-query.dto';
 import { deltaOverviewMetrics, deltaPeriodMetrics } from './metrics';
 import { resolveActivityWindow, resolveProgressPeriod } from './progress-period';
+import { decodeHistoryCursor } from './history-cursor';
 import {
   ProgressRepository,
   type ActivityRepositoryRow,
@@ -29,6 +30,12 @@ export class ProgressService {
     exerciseId: string,
     query: ExerciseProgressQueryDto,
   ): Promise<ExerciseProgressResponse> {
+    if (query.cursor && query.page !== 1) {
+      throw new BadRequestException('Usa cursor o page, no ambos métodos de paginación.');
+    }
+    const cursor = query.cursor
+      ? decodeHistoryCursor(query.cursor, { exerciseId, period: query.period })
+      : undefined;
     const period = resolveProgressPeriod(query.period);
     return this.prisma.$transaction(async (tx) => {
       await findVisibleExerciseOrThrow(tx, userId, exerciseId);
@@ -38,6 +45,7 @@ export class ProgressService {
         period,
         page: query.page,
         limit: query.limit,
+        cursor,
       });
       const comparison = period.previous && result.previous
         ? {
@@ -67,10 +75,11 @@ export class ProgressService {
         points: result.points,
         history: {
           items: result.history.items,
-          page: query.page,
+          page: query.cursor ? null : query.page,
           limit: query.limit,
           total: result.history.total,
-          hasMore: query.page * query.limit < result.history.total,
+          hasMore: result.history.hasMore,
+          nextCursor: result.history.nextCursor,
         },
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });

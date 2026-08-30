@@ -136,10 +136,11 @@ export interface ExerciseProgressResponse {
   points: ExerciseProgressPoint[];
   history: {
     items: ExerciseHistorySession[];
-    page: number;
+    page: number | null;
     limit: number;
     total: number;
     hasMore: boolean;
+    nextCursor: string | null;
   };
 }
 

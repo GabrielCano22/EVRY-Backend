@@ -40,6 +40,15 @@ describe('progress query DTOs', () => {
     )).rejects.toMatchObject({ status: 400 });
   });
 
+  it('accepts an opaque history cursor and bounds its size', async () => {
+    const pipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
+    await expect(pipe.transform(
+      { cursor: 'eyJ2IjoxfQ' }, { type: 'query', metatype: ExerciseProgressQueryDto },
+    )).resolves.toMatchObject({ cursor: 'eyJ2IjoxfQ', page: 1 });
+    await expect(errorsFor(ExerciseProgressQueryDto, { cursor: 'x'.repeat(513) }))
+      .resolves.not.toHaveLength(0);
+  });
+
   it('accepts every documented overview period and rejects unknown values', async () => {
     await expect(errorsFor(OverviewQueryDto, {})).resolves.toHaveLength(0);
     expect(plainToInstance(OverviewQueryDto, {})).toMatchObject({ period: '30d' });

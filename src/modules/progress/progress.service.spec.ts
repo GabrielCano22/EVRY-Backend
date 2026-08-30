@@ -51,7 +51,7 @@ describe('ProgressService', () => {
         },
         previous: zeroPeriod,
         points: [],
-        history: { items: [], total: 0 },
+        history: { items: [], total: 0, hasMore: false, nextCursor: null },
       }),
       getOverview: jest.fn().mockResolvedValue({
         current: zeroOverview,
@@ -88,7 +88,7 @@ describe('ProgressService', () => {
         },
         previous: zeroPeriod,
         points: [],
-        history: { items: [], total: 0 },
+        history: { items: [], total: 0, hasMore: false, nextCursor: null },
       };
     });
 
@@ -148,7 +148,7 @@ describe('ProgressService', () => {
         delta: zeroPeriod,
       },
       points: [],
-      history: { items: [], page: 2, limit: 5, total: 0, hasMore: false },
+      history: { items: [], page: 2, limit: 5, total: 0, hasMore: false, nextCursor: null },
     });
   });
 
@@ -171,7 +171,7 @@ describe('ProgressService', () => {
       },
       previous: null,
       points: [] as ExerciseProgressPoint[],
-      history: { items: [], total: 1 },
+      history: { items: [], total: 1, hasMore: false, nextCursor: null },
     });
 
     const result = await service.exerciseProgress(
@@ -212,6 +212,16 @@ describe('ProgressService', () => {
       expect.any(Function),
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
+  });
+
+  it('rejects malformed cursors and mixed pagination before opening a transaction', async () => {
+    await expect(service.exerciseProgress('user-1', 'exercise-1', {
+      period: '30d', page: 1, limit: 10, cursor: 'invalid',
+    })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.exerciseProgress('user-1', 'exercise-1', {
+      period: '30d', page: 2, limit: 10, cursor: 'invalid',
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('returns an all-time overview without inventing a previous-period comparison', async () => {

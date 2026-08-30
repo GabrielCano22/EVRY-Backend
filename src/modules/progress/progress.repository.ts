@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { MuscleGroup, Prisma } from '@prisma/client';
 import { APP_TIME_ZONE, type CivilDate } from '../../common/dates/civil-date';
 import { roundMetric } from './metrics';
+import { encodeHistoryCursor, type HistoryPosition } from './history-cursor';
 import type {
   ActivityWindow,
   BestWeightRecord,
@@ -23,13 +24,14 @@ export interface ExerciseProgressRepositoryInput {
   period: ProgressPeriodWindow;
   page: number;
   limit: number;
+  cursor?: HistoryPosition;
 }
 
 export interface ExerciseProgressRepositoryResult {
   current: ExerciseMetricSnapshot;
   previous: PeriodMetrics | null;
   points: ExerciseProgressPoint[];
-  history: { items: ExerciseHistorySession[]; total: number };
+  history: { items: ExerciseHistorySession[]; total: number; hasMore: boolean; nextCursor: string | null };
 }
 
 export interface OverviewRepositoryResult {
@@ -337,7 +339,7 @@ export class ProgressRepository {
   private async history(
     tx: ProgressReader,
     input: ExerciseProgressRepositoryInput,
-  ): Promise<{ items: ExerciseHistorySession[]; total: number }> {
+  ): Promise<ExerciseProgressRepositoryResult['history']> {
     const [countRow] = await tx.$queryRaw<CountRow[]>(Prisma.sql`
       WITH filtered_workout AS MATERIALIZED (
         SELECT w."id"
@@ -355,6 +357,10 @@ export class ProgressRepository {
         AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
     `);
     const total = Number(countRow?.total ?? 0n);
+    const cursorPredicate = input.cursor
+      ? Prisma.sql`AND (w."endedAt", w."id") < (${input.cursor.endedAt}, ${input.cursor.workoutId})`
+      : Prisma.empty;
+    const offset = input.cursor ? Prisma.empty : Prisma.sql`OFFSET ${(input.page - 1) * input.limit}`;
     const workouts = await tx.$queryRaw<HistoryWorkoutRow[]>(Prisma.sql`
       WITH filtered_workout AS MATERIALIZED (
         SELECT w."id", w."name", w."startedAt", w."endedAt"
@@ -374,13 +380,21 @@ export class ProgressRepository {
       WHERE ws."exerciseId" = ${input.exerciseId}
         AND ws."isWarmup" = FALSE
         AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+        ${cursorPredicate}
       ORDER BY w."endedAt" DESC, w."id" DESC
-      LIMIT ${input.limit}
-      OFFSET ${(input.page - 1) * input.limit}
+      LIMIT ${input.limit + 1}
+      ${offset}
     `);
-    if (workouts.length === 0) return { items: [], total };
+    if (workouts.length === 0) return { items: [], total, hasMore: false, nextCursor: null };
 
-    const workoutIds = workouts.map(({ workoutId }) => workoutId);
+    const hasMore = workouts.length > input.limit;
+    const pageWorkouts = workouts.slice(0, input.limit);
+    const last = pageWorkouts[pageWorkouts.length - 1];
+    const nextCursor = hasMore ? encodeHistoryCursor({
+      exerciseId: input.exerciseId, period: input.period.key,
+      endedAt: last.endedAt, workoutId: last.workoutId,
+    }) : null;
+    const workoutIds = pageWorkouts.map(({ workoutId }) => workoutId);
     const sets = await tx.$queryRaw<HistorySetRow[]>(Prisma.sql`
       SELECT
         ws."workoutId" AS "workoutId",
@@ -407,7 +421,9 @@ export class ProgressRepository {
 
     return {
       total,
-      items: workouts.map((workout) => ({
+      hasMore,
+      nextCursor,
+      items: pageWorkouts.map((workout) => ({
         workoutId: workout.workoutId,
         workoutName: workout.workoutName,
         startedAt: workout.startedAt.toISOString(),
@@ -455,6 +471,7 @@ export class ProgressRepository {
     userId: string,
     fromInclusive: Date,
     toExclusive: Date,
+    allTime = false,
   ): Promise<OverviewMetrics> {
     const [row] = await tx.$queryRaw<OverviewMetricRow[]>(Prisma.sql`
       WITH completed_workout AS MATERIALIZED (
@@ -483,7 +500,7 @@ export class ProgressRepository {
         (SELECT MIN("endedAt") FROM completed_workout) AS "firstCompletedAt"
     `);
     const sessionsCompleted = Number(row?.sessionsCompleted ?? 0n);
-    const effectiveFrom = row?.firstCompletedAt && row.firstCompletedAt > fromInclusive
+    const effectiveFrom = allTime && row?.firstCompletedAt && row.firstCompletedAt > fromInclusive
       ? row.firstCompletedAt
       : fromInclusive;
     const periodDays = Math.max(
@@ -504,7 +521,7 @@ export class ProgressRepository {
     period: ProgressPeriodWindow,
   ): Promise<OverviewRepositoryResult> {
     const fromInclusive = period.fromInclusive ?? new Date(0);
-    const current = await this.overviewMetrics(tx, userId, fromInclusive, period.toExclusive);
+    const current = await this.overviewMetrics(tx, userId, fromInclusive, period.toExclusive, period.key === 'all');
     const previous = period.previous
       ? await this.overviewMetrics(
         tx,
