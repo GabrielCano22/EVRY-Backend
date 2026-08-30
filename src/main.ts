@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { join } from 'node:path';
@@ -14,6 +14,7 @@ import {
 import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 import { legacyApiAliasMiddleware } from './common/http/api-version.middleware';
 import { requestIdMiddleware } from './common/http/request-id.middleware';
+import { createOpenApiDocument } from './openapi/openapi-document';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -24,7 +25,7 @@ async function bootstrap() {
   app.use(cookieParser());
   app.use(requestIdMiddleware);
   app.use(legacyApiAliasMiddleware);
-  const corsOrigins = configuredCorsOrigins(process.env.CORS_ORIGIN);
+  const corsOrigins = configuredCorsOrigins(configService.getOrThrow<string>('CORS_ORIGIN'));
   // __dirname apunta a dist/ al ejecutar la versión compilada; de esta forma
   // los GIF y JPG se sirven aunque el proceso se inicie desde otra carpeta.
   registerExerciseMedia(app, join(__dirname, '..', 'assets', 'exercises'), {
@@ -56,13 +57,7 @@ async function bootstrap() {
   app.useGlobalFilters(new ApiExceptionFilter());
 
   if (swaggerEnabled) {
-    const config = new DocumentBuilder()
-      .setTitle('EVRY API')
-      .setDescription('Aplicación de entrenamiento adaptativo con integración del ciclo hormonal')
-      .setVersion('1.0')
-      .addBearerAuth()
-      .build();
-    const doc = SwaggerModule.createDocument(app, config);
+    const doc = createOpenApiDocument(app);
     SwaggerModule.setup('docs', app, doc);
   }
 

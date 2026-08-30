@@ -20,6 +20,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "openapi:generate": "npm run build && cross-env DATABASE_URL=postgresql://evry:evry@127.0.0.1:5432/evry JWT_ACCESS_SECRET=access-secret-123456789012345678901 JWT_REFRESH_SECRET=refresh-secret-12345678901234567890 CORS_ORIGIN=http://localhost:3000 PORT=4000 SWAGGER_ENABLED=false node scripts/generate-openapi.cjs",
+    "openapi:check": "npm run openapi:generate && git diff --exit-code -- openapi/evry-v1.json",
     "seed": "ts-node prisma/seed.ts",
     "exercises:verify": "ts-node scripts/verify-exercise-assets.ts",
     "exercises:import": "ts-node prisma/import-exercises.ts",

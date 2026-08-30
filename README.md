@@ -1,6 +1,6 @@
 # EVRY Backend
 
-API REST de EVRY con NestJS 10, PostgreSQL y Prisma. Expone la API bajo `/api` y sirve medios locales del catálogo en `/media/exercises`.
+API REST de EVRY con NestJS 12, PostgreSQL y Prisma 7. Expone la API canónica bajo `/api/v1`, mantiene `/api` como alias temporal y sirve medios locales en `/media/exercises`.
 
 ## Configuración segura
 
@@ -21,11 +21,12 @@ Los secretos de acceso y refresh deben ser distintos, tener al menos 32 caracter
 ```powershell
 Copy-Item .env.example .env
 npm.cmd install
+npm.cmd run prisma:validate
 npm.cmd run prisma:generate
 npm.cmd run start:dev
 ```
 
-La API local escucha en `http://localhost:4000/api`. Comandos disponibles:
+La API local escucha en `http://localhost:4000/api/v1`. Se requieren Node 24.14.x y npm 11.x. Comandos disponibles:
 
 ```powershell
 npm.cmd run lint:check
@@ -34,6 +35,7 @@ npm.cmd run test:unit -- --runInBand
 npm.cmd run test:db:migrate
 npm.cmd run test:integration -- --runInBand
 npm.cmd run build
+npm.cmd audit --audit-level=high
 ```
 
 ## Base de pruebas aislada
@@ -59,6 +61,12 @@ Las rutas de registro, inicio de sesión y refresh usan límites específicos de
 ## Errores y datos
 
 Los filtros de Prisma normalizan conflictos, referencias, ausencias y problemas de conexión sin exponer SQL ni mensajes internos. Un problema de conexión responde como servicio no disponible, reintentable y con `Retry-After`.
+
+El proceso se niega a iniciar si faltan la URL PostgreSQL, los dos secretos distintos, `PORT`, `SWAGGER_ENABLED` o `CORS_ORIGIN`. Prisma 7 usa `prisma.config.ts` para migraciones y el adaptador PostgreSQL en runtime.
+
+## CI y staging
+
+`.github/workflows/ci.yml` levanta PostgreSQL 17 aislado y ejecuta validate/generate, lint, build, pruebas unitarias, migraciones e integración. `render.yaml` define el servicio gratuito de staging y su health check. Como Render Free no ofrece pre-deploy separado, `prisma migrate deploy` se ejecuta antes de iniciar el proceso y es idempotente. Los valores `DATABASE_URL`, `CORS_ORIGIN` y `MEDIA_BASE_URL` deben configurarse en Render. Consulte `docs/operations/migration-runbook.md` antes de tocar datos conservados.
 
 La migración `20260819090000_release_invariants` es expandible: añade campos nullable a sesiones y series, emite un reporte agregado de sesiones activas duplicadas, conserva la más reciente y marca las anteriores como canceladas. Después crea la unicidad parcial de una sesión activa por usuario, índices de consulta y la unicidad de `clientMutationId` por sesión. No elimina sesiones ni series.
 
