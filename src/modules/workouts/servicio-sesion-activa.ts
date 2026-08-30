@@ -31,9 +31,12 @@ function isActiveWorkoutConflict(error: unknown): boolean {
 
   const target = error.meta?.target;
   const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')];
+  const message = error.message ?? '';
   return fields.includes('userId')
     || fields.includes('Workout_userId_active_unique')
-    || fields.includes('Workout_userId_status_active_unique');
+    || fields.includes('Workout_userId_status_active_unique')
+    || message.includes('Workout_userId_active_unique')
+    || message.includes('Workout_userId_status_active_unique');
 }
 
 @Injectable()
