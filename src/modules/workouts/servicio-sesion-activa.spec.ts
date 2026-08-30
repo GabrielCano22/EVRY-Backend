@@ -12,6 +12,16 @@ function uniqueError(target: string[]) {
   });
 }
 
+function uniqueErrorFromConstraintMessage(constraint: string) {
+  return new Prisma.PrismaClientKnownRequestError(
+    `Unique constraint failed on the constraint: \`${constraint}\``,
+    {
+      clientVersion: '5.10.0',
+      code: 'P2002',
+    },
+  );
+}
+
 function makeService(options?: {
   active?: unknown;
   created?: unknown;
@@ -115,6 +125,17 @@ describe('ServicioSesionActiva', () => {
     const winner = { id: 'race-winner', userId: 'user-1', status: 'ACTIVE' };
     const { service } = makeService({
       createError: uniqueError(['Workout_userId_status_active_unique']),
+      activeAfterConflict: winner,
+    });
+
+    await expect(service.iniciarOContinuar('user-1', { name: 'Concurrent start' }))
+      .resolves.toBe(winner);
+  });
+
+  it('recovers from active-workout conflicts when Prisma only reports the constraint in the message', async () => {
+    const winner = { id: 'race-winner', userId: 'user-1', status: 'ACTIVE' };
+    const { service } = makeService({
+      createError: uniqueErrorFromConstraintMessage('Workout_userId_status_active_unique'),
       activeAfterConflict: winner,
     });
 
