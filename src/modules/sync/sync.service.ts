@@ -27,7 +27,18 @@ export class SyncService {
     private readonly exerciseStats: ExerciseStatsService,
   ) {}
 
-  syncWorkout(userId: string, dto: SyncWorkoutDto) {
+  async syncWorkout(userId: string, dto: SyncWorkoutDto) {
+    const setIds = new Set<string>();
+    const slots = new Set<string>();
+    const deleted = new Set(dto.deletedSetClientIds);
+    for (const set of dto.sets) {
+      const slot = JSON.stringify([set.exerciseId, set.order]);
+      if (setIds.has(set.clientId) || slots.has(slot) || deleted.has(set.clientId)) {
+        throw new BadRequestException('Las series deben tener identificadores y órdenes únicos y no estar marcadas para eliminación.');
+      }
+      setIds.add(set.clientId);
+      slots.add(slot);
+    }
     return runSerializableTransaction(this.prisma, async (tx) => {
       await lockWorkoutLifecycle(tx, userId);
 
@@ -95,6 +106,13 @@ export class SyncService {
           .filter((set): set is typeof set & { clientId: string } => Boolean(set.clientId))
           .map((set) => [set.clientId, set]),
       );
+      // Release deleted slots before assigning new/reordered sets. Deleting only
+      // after upserts would violate the unique workout/exercise/order constraint.
+      if (dto.deletedSetClientIds.length > 0) {
+        await tx.workoutSet.deleteMany({
+          where: { workoutId, clientId: { in: dto.deletedSetClientIds } },
+        });
+      }
       const incomingExistingIds = dto.sets
         .map(({ clientId }) => byClientId.get(clientId)?.id)
         .filter((id): id is string => Boolean(id));
@@ -137,12 +155,6 @@ export class SyncService {
             },
           });
         }
-      }
-
-      if (dto.deletedSetClientIds.length > 0) {
-        await tx.workoutSet.deleteMany({
-          where: { workoutId, clientId: { in: dto.deletedSetClientIds } },
-        });
       }
 
       const usefulSets = await tx.workoutSet.findMany({
