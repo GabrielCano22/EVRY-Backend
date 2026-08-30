@@ -1,5 +1,5 @@
 import { assertSafeTestDatabase } from './guard-test-database';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../src/prisma/prisma-client';
 import { randomUUID } from 'node:crypto';
 
 function callGuard(testUrl: string | undefined, runtimeUrl: string | undefined): string {
@@ -44,7 +44,7 @@ describe('test database guard', () => {
 });
 
 describe('release invariants database migration', () => {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   let userId: string;
 
   beforeAll(async () => {

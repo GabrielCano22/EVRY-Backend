@@ -1,4 +1,5 @@
-import { Equipment, MuscleGroup, PrismaClient, Routine, RoutineExercise } from '@prisma/client';
+import { Equipment, MuscleGroup, Routine, RoutineExercise } from '@prisma/client';
+import { createPrismaClient } from '../src/prisma/prisma-client';
 import { randomUUID } from 'node:crypto';
 import { RoutinesService } from '../src/modules/routines/routines.service';
 import { ServicioSesionActiva } from '../src/modules/workouts/servicio-sesion-activa';
@@ -26,7 +27,7 @@ function snapshotRoutine(routine: RoutineWithExercises) {
 }
 
 describe('RoutinesService PostgreSQL transaction rollback', () => {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const service = new RoutinesService(prisma as never, {} as ServicioSesionActiva);
   const fixtureExerciseIds: string[] = [];
   let fixtureUserId: string | undefined;

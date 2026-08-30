@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../src/prisma/prisma-client';
 import { DatasetExercise, toExerciseCreateInput } from '../src/modules/exercises/exercise-catalog';
 
 export function loadSourceExercises(): DatasetExercise[] {
@@ -39,7 +40,7 @@ export async function importSourceExercises(client: PrismaClient, records = load
 }
 
 if (require.main === module) {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   importSourceExercises(prisma)
     .then((result) => console.log(`Imported ${result.total} exercises (${result.inserted} inserted, ${result.updated} updated).`))
     .catch((error) => {

@@ -1,13 +1,13 @@
 import { normalizeDatabaseUrl } from './database-url';
 
 describe('normalizeDatabaseUrl', () => {
-  it('adapta Neon pooler para Prisma y elimina channel binding incompatible', () => {
+  it('preserva los parámetros TLS de Neon para el adaptador PostgreSQL', () => {
     const result = normalizeDatabaseUrl(
       'postgresql://usuario:clave@ep-demo-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
     );
 
     expect(result).toBe(
-      'postgresql://usuario:clave@ep-demo-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&pgbouncer=true',
+      'postgresql://usuario:clave@ep-demo-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
     );
   });
 
