@@ -6,6 +6,7 @@ const validEnvironment = () => ({
   JWT_ACCESS_SECRET: randomBytes(32).toString('hex'),
   JWT_REFRESH_SECRET: randomBytes(32).toString('hex'),
   PORT: '4000',
+  CORS_ORIGIN: 'http://localhost:3000',
   SWAGGER_ENABLED: 'false',
 });
 
@@ -15,6 +16,13 @@ describe('validateEnvironment', () => {
     delete environment.JWT_ACCESS_SECRET;
 
     expect(() => validateEnvironment(environment)).toThrow('JWT_ACCESS_SECRET');
+  });
+
+  it('rechaza una configuración sin orígenes CORS explícitos', () => {
+    const environment: Record<string, unknown> = validEnvironment();
+    delete environment.CORS_ORIGIN;
+
+    expect(() => validateEnvironment(environment)).toThrow('CORS_ORIGIN');
   });
 
   it.each([
@@ -45,6 +53,7 @@ describe('validateEnvironment', () => {
     ['puerto no numérico', { PORT: 'four-thousand' }],
     ['puerto fuera de rango', { PORT: '65536' }],
     ['flag Swagger no booleano', { SWAGGER_ENABLED: 'yes' }],
+    ['origen CORS no HTTP', { CORS_ORIGIN: 'evry.example.com' }],
   ])('rechaza %s', (_description, override) => {
     expect(() => validateEnvironment({ ...validEnvironment(), ...override })).toThrow();
   });

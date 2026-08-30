@@ -13,6 +13,7 @@ describe('authentication rate limits', () => {
     JWT_ACCESS_SECRET: `evry-test-${randomBytes(32).toString('hex')}`,
     JWT_REFRESH_SECRET: `evry-test-${randomBytes(32).toString('hex')}`,
     PORT: '4000',
+    CORS_ORIGIN: 'http://localhost:3000',
     SWAGGER_ENABLED: 'false',
   };
   const savedEnvironment = new Map<string, string | undefined>();

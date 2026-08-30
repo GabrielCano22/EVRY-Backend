@@ -2,6 +2,7 @@ export interface RuntimeConfig {
   databaseUrl: string;
   jwtSecret: string;
   refreshSecret: string;
+  corsOrigins: string[];
   port: number;
   swaggerEnabled: boolean;
 }
@@ -59,6 +60,20 @@ function portValue(env: Record<string, unknown>): number {
   return port;
 }
 
+function corsOriginValue(env: Record<string, unknown>): string {
+  const raw = requiredString(env, 'CORS_ORIGIN');
+  const origins = raw.split(',').map((value) => value.trim()).filter(Boolean);
+  if (origins.length === 0) throw new Error('CORS_ORIGIN must include at least one origin.');
+  for (const origin of origins) {
+    let parsed: URL;
+    try { parsed = new URL(origin); } catch { throw new Error('CORS_ORIGIN must contain valid HTTP origins.'); }
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== origin.replace(/\/+$/, '')) {
+      throw new Error('CORS_ORIGIN must contain valid HTTP origins.');
+    }
+  }
+  return origins.map((origin) => origin.replace(/\/+$/, '')).join(',');
+}
+
 export function validateEnvironment(env: Record<string, unknown>): Record<string, unknown> {
   const databaseUrl = requiredString(env, 'DATABASE_URL');
   let parsedDatabaseUrl: URL;
@@ -83,6 +98,7 @@ export function validateEnvironment(env: Record<string, unknown>): Record<string
   }
 
   const port = portValue(env);
+  const corsOrigin = corsOriginValue(env);
   const swaggerEnabled = booleanValue(env, 'SWAGGER_ENABLED');
 
   return {
@@ -91,6 +107,7 @@ export function validateEnvironment(env: Record<string, unknown>): Record<string
     JWT_ACCESS_SECRET: accessSecret,
     JWT_REFRESH_SECRET: refreshSecret,
     PORT: port,
+    CORS_ORIGIN: corsOrigin,
     SWAGGER_ENABLED: swaggerEnabled,
   };
 }
