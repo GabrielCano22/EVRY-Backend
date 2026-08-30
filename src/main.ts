@@ -1,47 +1,52 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
+import { SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { join } from 'node:path';
 import type { Request, Response } from 'express';
 import { AppModule } from './app.module';
-import { registerExerciseMedia } from './media/exercise-media.middleware';
-import { PrismaConnectionExceptionFilter } from './common/filters/prisma-connection-exception.filter';
+import {
+  configuredCorsOrigins,
+  registerExerciseMedia,
+} from './media/exercise-media.middleware';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter';
+import { legacyApiAliasMiddleware } from './common/http/api-version.middleware';
+import { requestIdMiddleware } from './common/http/request-id.middleware';
+import { createOpenApiDocument } from './openapi/openapi-document';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+  const swaggerEnabled = configService.getOrThrow<boolean>('SWAGGER_ENABLED');
 
   app.use(helmet());
   app.use(cookieParser());
+  app.use(requestIdMiddleware);
+  app.use(legacyApiAliasMiddleware);
+  const corsOrigins = configuredCorsOrigins(configService.getOrThrow<string>('CORS_ORIGIN'));
   // __dirname apunta a dist/ al ejecutar la versión compilada; de esta forma
   // los GIF y JPG se sirven aunque el proceso se inicie desde otra carpeta.
-  registerExerciseMedia(app, join(__dirname, '..', 'assets', 'exercises'));
+  registerExerciseMedia(app, join(__dirname, '..', 'assets', 'exercises'), {
+    allowedOrigins: corsOrigins,
+  });
   app.enableCors({
-    origin: [
-      ...(process.env.CORS_ORIGIN ?? 'http://localhost:3000')
-        .split(',')
-        .map((origin) => origin.trim())
-        .filter(Boolean),
-      'http://127.0.0.1:3000',
-    ],
+    origin: corsOrigins,
     credentials: true,
+    exposedHeaders: ['Content-Length', 'ETag'],
   });
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api/v1');
   const httpServer = app.getHttpAdapter().getInstance();
   httpServer.get('/', (_request: Request, response: Response) =>
     response.status(200).json({
       nombre: 'EVRY API',
       estado: 'ok',
-      api: '/api',
-      documentacion: '/docs',
+      api: '/api/v1',
+      ...(swaggerEnabled ? { documentacion: '/docs' } : {}),
     }),
   );
-  httpServer.get('/health', (_request: Request, response: Response) =>
-    response.status(200).json({ estado: 'ok' }),
-  );
-
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -49,19 +54,15 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.useGlobalFilters(new PrismaConnectionExceptionFilter());
+  app.useGlobalFilters(new ApiExceptionFilter());
 
-  const config = new DocumentBuilder()
-    .setTitle('EVRY API')
-    .setDescription('Aplicación de entrenamiento adaptativo con integración del ciclo hormonal')
-    .setVersion('0.1')
-    .addBearerAuth()
-    .build();
-  const doc = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, doc);
+  if (swaggerEnabled) {
+    const doc = createOpenApiDocument(app);
+    SwaggerModule.setup('docs', app, doc);
+  }
 
-  const port = Number(process.env.PORT ?? 4000);
+  const port = configService.getOrThrow<number>('PORT');
   await app.listen(port);
-  console.log(`EVRY API on http://localhost:${port}/api`);
+  console.log(`EVRY API on http://localhost:${port}/api/v1`);
 }
 bootstrap();

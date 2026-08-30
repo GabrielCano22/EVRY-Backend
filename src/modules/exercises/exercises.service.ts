@@ -3,6 +3,7 @@ import { Exercise, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { ListExercisesDto } from './dto/list-exercises.dto';
+import { findVisibleExerciseOrThrow, visibleExerciseWhere } from './exercise-visibility';
 
 const listSelect = {
   id: true,
@@ -37,11 +38,7 @@ export class ExercisesService {
     const limit = opts.limit ?? 30;
     const where: Prisma.ExerciseWhereInput = {
       AND: [
-        // Los 1.324 ejercicios del catálogo oficial tienen sourceId y medios
-        // locales. Conservamos los ejercicios antiguos sin sourceId para
-        // datos históricos, pero no los mostramos en el selector porque no
-        // tienen GIF/JPG asociados.
-        { OR: [{ sourceId: { not: null } }, { ownerId: userId }] },
+        visibleExerciseWhere(userId),
         opts.muscleGroup ? { muscleGroup: opts.muscleGroup } : {},
         opts.equipment ? { equipment: opts.equipment } : {},
         opts.category ? { category: { equals: opts.category, mode: 'insensitive' } } : {},
@@ -80,9 +77,7 @@ export class ExercisesService {
   }
 
   async getById(userId: string, id: string) {
-    const ex = await this.prisma.exercise.findUnique({ where: { id } });
-    if (!ex) throw new NotFoundException();
-    if (ex.ownerId && ex.ownerId !== userId) throw new ForbiddenException();
+    const ex = await findVisibleExerciseOrThrow(this.prisma, userId, id);
     return this.serialize(ex);
   }
 

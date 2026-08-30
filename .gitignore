@@ -12,3 +12,4 @@ scripts/*.d.ts
 prisma/*.js
 prisma/*.js.map
 prisma/*.d.ts
+.worktrees/

@@ -1,0 +1,13 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "testRegex": "test/.*\\.integration-spec\\.ts$",
+  "extensionsToTreatAsEsm": [".ts"],
+  "transform": {
+    "^.+\\.ts$": ["ts-jest", { "tsconfig": "tsconfig.spec.json", "useESM": true }]
+  },
+  "moduleNameMapper": { "^(\\.{1,2}/.*)\\.js$": "$1" },
+  "testEnvironment": "node",
+  "setupFiles": ["<rootDir>/test/guard-test-database.ts"],
+  "setupFilesAfterEnv": ["<rootDir>/test/setup-jest.ts"]
+}

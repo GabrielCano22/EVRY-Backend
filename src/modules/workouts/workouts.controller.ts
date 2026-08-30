@@ -34,6 +34,11 @@ export class WorkoutsController {
     return this.svc.finish(u.id, id, dto);
   }
 
+  @Post(':id/cancel')
+  cancel(@CurrentUser() u: AuthUser, @Param('id') id: string) {
+    return this.svc.cancel(u.id, id);
+  }
+
   @Delete(':id')
   remove(@CurrentUser() u: AuthUser, @Param('id') id: string) {
     return this.svc.remove(u.id, id);

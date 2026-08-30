@@ -1,17 +1,12 @@
 import { PrismaService } from './prisma.service';
 
 describe('PrismaService', () => {
-  it('does not block application startup while the database connection is pending', async () => {
+  it('propaga el fallo de conexion para impedir que la aplicacion anuncie salud', async () => {
+    process.env.DATABASE_URL = 'postgresql://evry:evry@127.0.0.1:5432/evry';
     const service = new PrismaService();
-    jest.spyOn(service, '$connect').mockImplementation(
-      () => new Promise<void>(() => undefined),
-    );
+    const unavailable = new Error('database unavailable');
+    jest.spyOn(service, '$connect').mockRejectedValue(unavailable);
 
-    const initialized = await Promise.race([
-      service.onModuleInit().then(() => true),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 25)),
-    ]);
-
-    expect(initialized).toBe(true);
+    await expect(service.onModuleInit()).rejects.toBe(unavailable);
   });
 });

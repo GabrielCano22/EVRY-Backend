@@ -21,7 +21,7 @@ export class RoutineExerciseDto {
   @IsInt() @Min(0) order!: number;
   @IsInt() @Min(1) @Max(20) targetSets!: number;
   @IsOptional() @IsInt() @Min(1) @Max(100) targetReps?: number;
-  @IsOptional() @IsNumber() targetWeightKg?: number;
+  @IsOptional() @IsNumber() @Min(0) targetWeightKg?: number;
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

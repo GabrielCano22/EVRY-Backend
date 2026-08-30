@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CycleService } from '../cycle/cycle.service';
+import { ReadinessService } from '../readiness/readiness.service';
 
 export interface Recommendation {
   exerciseId: string;
@@ -13,14 +14,18 @@ export interface Recommendation {
 
 @Injectable()
 export class AdaptiveService {
-  constructor(private prisma: PrismaService, private cycle: CycleService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cycle: CycleService,
+    private readiness: ReadinessService,
+  ) {}
 
   async recommend(userId: string, exerciseId: string): Promise<Recommendation> {
     const recentSets = await this.prisma.workoutSet.findMany({
       where: {
         exerciseId,
         isWarmup: false,
-        workout: { userId, endedAt: { not: null } },
+        workout: { userId, status: 'COMPLETED' },
         weightKg: { not: null },
         reps: { not: null },
       },
@@ -33,10 +38,10 @@ export class AdaptiveService {
       return {
         exerciseId,
         targetWeightKg: null,
-        targetReps: 8,
-        rationale: ['Primer registro: sugerimos peso liviano técnica primero.'],
-        confidence: 0.3,
-        action: 'NEW',
+        targetReps: null,
+        rationale: ['Aún no hay dos sesiones comparables para sugerir una carga.'],
+        confidence: 0,
+        action: 'HOLD',
       };
     }
 
@@ -51,6 +56,21 @@ export class AdaptiveService {
     const last = sessions[0];
     const prev = sessions[1];
 
+    if (!prev) {
+      const phaseInfo = await this.cycle.phaseInfo(userId);
+      return {
+        exerciseId,
+        targetWeightKg: null,
+        targetReps: null,
+        rationale: [
+          'Aún no hay dos sesiones comparables para sugerir una carga.',
+          ...(phaseInfo ? [`Contexto estimado ${phaseInfo.phase.toLowerCase()}: ${phaseInfo.trainingHint}`] : []),
+        ],
+        confidence: 0.25,
+        action: 'HOLD',
+      };
+    }
+
     const lastTopWeight = Math.max(...last.map((s) => s.weightKg ?? 0));
     const lastTopSet = last.find((s) => (s.weightKg ?? 0) === lastTopWeight)!;
     const lastReps = lastTopSet.reps ?? 0;
@@ -63,16 +83,14 @@ export class AdaptiveService {
 
     // Cycle modulation
     const phaseInfo = await this.cycle.phaseInfo(userId);
-    let intensityCap = 1.0;
     if (phaseInfo) {
-      intensityCap = phaseInfo.intensityCap;
-      rationale.push(`Fase ${phaseInfo.phase.toLowerCase()}: ${phaseInfo.trainingHint}`);
+      rationale.push(`Contexto estimado ${phaseInfo.phase.toLowerCase()}: ${phaseInfo.trainingHint}`);
     }
 
     // Progression rule
     if (lastRpe <= 8 && lastReps >= targetReps) {
       const inc = lastTopWeight >= 60 ? 2.5 : 1.0;
-      targetWeight = Math.round((lastTopWeight + inc) * intensityCap * 2) / 2;
+      targetWeight = Math.round((lastTopWeight + inc) * 2) / 2;
       action = 'PROGRESS';
       rationale.push(`Última sesión RPE ${lastRpe} ≤ 8, completaste ${lastReps} repeticiones. Sube ${inc} kg.`);
     } else if (prev) {
@@ -88,14 +106,13 @@ export class AdaptiveService {
     }
 
     // Readiness override
-    const readiness = await this.prisma.readiness.findFirst({
-      where: { userId },
-      orderBy: { date: 'desc' },
-    });
-    if (readiness && readiness.score < 50 && action === 'PROGRESS') {
+    const readiness = await this.readiness.latest(userId);
+    if ((!readiness || readiness.score < 50) && action === 'PROGRESS') {
       action = 'HOLD';
       targetWeight = lastTopWeight;
-      rationale.push(`Estado diario ${readiness.score.toFixed(0)}/100 bajo: posponemos la progresión.`);
+      rationale.push(readiness
+        ? `Estado diario ${readiness.score.toFixed(0)}/100 bajo: posponemos la progresión.`
+        : 'Sin readiness de hoy: mantenemos la carga de forma conservadora.');
     }
 
     const confidence = Math.min(1, sessions.length / 3) * (phaseInfo ? 1 : 0.85);

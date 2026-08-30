@@ -1,7 +1,8 @@
-import { PrismaClient, MuscleGroup, Equipment } from '@prisma/client';
+import { MuscleGroup, Equipment } from '@prisma/client';
+import { createPrismaClient } from '../src/prisma/prisma-client';
 import { importSourceExercises } from './import-exercises';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 const exercises: Array<{
   name: string;

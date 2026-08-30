@@ -1,14 +1,30 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, createHash, randomUUID } from 'crypto';
+import { Prisma, RefreshTokenPlatform } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
+const DUMMY_BCRYPT_HASH = '$2b$12$EeP/sfETTTWk4MPVu2UTLOeIbAN.OP1CE4bDsFHdHlgRqcecbiXxO';
+
+class ConcurrentRefreshError extends Error {}
+
+interface RefreshTokenWriter {
+  refreshToken: {
+    create(args: Prisma.RefreshTokenCreateArgs): Promise<unknown>;
+  };
+}
+
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService, private jwt: JwtService) {}
+  constructor(
+    private prisma: PrismaService,
+    private jwt: JwtService,
+    private config: ConfigService,
+  ) {}
 
   async register(dto: RegisterDto) {
     const email = dto.email.trim().toLowerCase();
@@ -29,16 +45,15 @@ export class AuthService {
     return this.issueTokens(user.id, user.email);
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, platform: RefreshTokenPlatform = 'WEB') {
     const email = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) throw new UnauthorizedException('Las credenciales no son válidas.');
-    const ok = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('Las credenciales no son válidas.');
-    return this.issueTokens(user.id, user.email);
+    const ok = await bcrypt.compare(dto.password, user?.passwordHash ?? DUMMY_BCRYPT_HASH);
+    if (!user || !ok) throw new UnauthorizedException('Las credenciales no son válidas.');
+    return this.issueTokens(user.id, user.email, platform);
   }
 
-  async refresh(refreshToken?: string) {
+  async refresh(refreshToken?: string, platform: RefreshTokenPlatform = 'WEB') {
     if (!refreshToken?.trim()) {
       throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
     }
@@ -48,42 +63,84 @@ export class AuthService {
       where: { tokenHash },
       include: { user: true },
     });
-    if (!record || record.revokedAt || record.expiresAt < new Date()) {
+    if (!record) {
       throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
     }
-    await this.prisma.refreshToken.update({
-      where: { id: record.id },
-      data: { revokedAt: new Date() },
-    });
-    return this.issueTokens(record.user.id, record.user.email);
+    const invalid = record.revokedAt || record.expiresAt < new Date() || record.platform !== platform;
+    if (invalid) {
+      await this.revokeFamily(record.familyId);
+      throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
+    }
+
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const rotation = await tx.refreshToken.updateMany({
+            where: { id: record.id, revokedAt: null },
+            data: { revokedAt: new Date() },
+          });
+          if (rotation.count !== 1) throw new ConcurrentRefreshError();
+          return this.issueTokens(
+            record.user.id,
+            record.user.email,
+            platform,
+            record.familyId,
+            tx,
+          );
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (!(error instanceof ConcurrentRefreshError)) throw error;
+      await this.revokeFamily(record.familyId);
+      throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
+    }
   }
 
   async logout(refreshToken: string) {
     const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
-    await this.prisma.refreshToken
-      .update({ where: { tokenHash }, data: { revokedAt: new Date() } })
-      .catch(() => undefined);
+    const record = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      select: { familyId: true },
+    });
+    if (record) await this.revokeFamily(record.familyId);
     return { ok: true };
   }
 
-  private async issueTokens(userId: string, email: string) {
+  private async issueTokens(
+    userId: string,
+    email: string,
+    platform: RefreshTokenPlatform = 'WEB',
+    familyId: string = randomUUID(),
+    db: RefreshTokenWriter = this.prisma,
+  ) {
     const accessToken = await this.jwt.signAsync(
       { sub: userId, email },
       {
-        secret: process.env.JWT_ACCESS_SECRET ?? 'dev-secret',
-        expiresIn: process.env.JWT_ACCESS_TTL ?? '15m',
+        secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        expiresIn: (this.config.get<string>('JWT_ACCESS_TTL') ?? '15m') as JwtSignOptions['expiresIn'],
       },
     );
 
     const refreshToken = randomBytes(48).toString('hex');
     const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
-    const ttlDays = parseInt((process.env.JWT_REFRESH_TTL ?? '30d').replace('d', ''), 10) || 30;
+    const ttlDays = parseInt(
+      (this.config.get<string>('JWT_REFRESH_TTL') ?? '30d').replace('d', ''),
+      10,
+    ) || 30;
     const expiresAt = new Date(Date.now() + ttlDays * 86400_000);
 
-    await this.prisma.refreshToken.create({
-      data: { userId, tokenHash, expiresAt },
+    await db.refreshToken.create({
+      data: { userId, tokenHash, expiresAt, familyId, platform },
     });
 
     return { accessToken, refreshToken, expiresAt };
+  }
+
+  private revokeFamily(familyId: string) {
+    return this.prisma.refreshToken.updateMany({
+      where: { familyId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 }
