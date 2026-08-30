@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const root = join(__dirname, '..', '..');
+const root = process.cwd();
 const schema = readFileSync(join(root, 'prisma', 'schema.prisma'), 'utf8');
 const migrationPath = join(
   root,

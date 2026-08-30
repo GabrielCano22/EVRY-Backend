@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const root = join(__dirname, '..', '..');
+const root = process.cwd();
 const schema = readFileSync(join(root, 'prisma', 'schema.prisma'), 'utf8');
 const migration = readFileSync(
   join(root, 'prisma', 'migrations', '20260829020000_refresh_token_families', 'migration.sql'),
