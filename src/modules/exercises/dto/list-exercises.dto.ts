@@ -6,12 +6,13 @@ export class ListExercisesDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(10000)
   page = 1;
 
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(50)
+  @Max(30)
   limit = 30;
 
   @IsOptional()
