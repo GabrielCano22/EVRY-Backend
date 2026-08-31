@@ -12,7 +12,7 @@ async function generate() {
     const document = createOpenApiDocument(app);
     assertCompleteContract(document);
     const { default: openapiTS, astToString } = await import('openapi-typescript');
-    const client = astToString(await openapiTS(document));
+    const client = astToString(await openapiTS(document, { defaultNonNullable: false }));
     writeFileSync(resolve(process.cwd(), 'openapi', 'evry-v1.json'), `${JSON.stringify(document, null, 2)}\n`);
     writeFileSync(resolve(process.cwd(), 'openapi', 'client.generated.ts'), client);
   } finally {

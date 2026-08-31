@@ -48,3 +48,11 @@ it('publishes an actual typed paginated catalog with media, metadata and authent
     isCustom: { type: 'boolean' }, attribution: { type: 'string', nullable: true },
   } });
 });
+
+it('accepts omitted pagination and documents supplied page and limit as bounded integers', () => {
+  const parameters = createOpenApiDocument(app).paths['/api/v1/exercises'].get!.parameters;
+  expect(parameters).toEqual(expect.arrayContaining([
+    expect.objectContaining({ name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 10000, default: 1 } }),
+    expect.objectContaining({ name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 30, default: 30 } }),
+  ]));
+});

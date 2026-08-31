@@ -550,12 +550,12 @@ export interface components {
              * @default PREFER_NOT_SAY
              * @enum {string|null}
              */
-            biologicalSex: "MALE" | "FEMALE" | "OTHER" | "PREFER_NOT_SAY" | null;
+            biologicalSex?: "MALE" | "FEMALE" | "OTHER" | "PREFER_NOT_SAY" | null;
             /**
              * @description Omitted or null values disable cycle tracking.
              * @default false
              */
-            trackCycle: boolean | null;
+            trackCycle?: boolean | null;
         };
         AccessToken: {
             accessToken: string;
@@ -633,7 +633,6 @@ export interface components {
             avgCycleLen: number;
             avgPeriodLen: number;
         };
-        Object: Record<string, never>;
         ExerciseListItemDto: {
             id: string;
             sourceId: string | null;
@@ -1831,9 +1830,9 @@ export interface operations {
     };
     ExercisesController_list: {
         parameters: {
-            query: {
-                page: components["schemas"]["Object"];
-                limit: components["schemas"]["Object"];
+            query?: {
+                page?: number;
+                limit?: number;
                 muscleGroup?: "CHEST" | "BACK" | "SHOULDERS" | "BICEPS" | "TRICEPS" | "FOREARMS" | "CORE" | "QUADS" | "HAMSTRINGS" | "GLUTES" | "CALVES" | "FULL_BODY" | "CARDIO";
                 q?: string;
                 tag?: string;

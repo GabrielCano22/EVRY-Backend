@@ -750,32 +750,24 @@
         "parameters": [
           {
             "name": "page",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "minimum": 1,
               "maximum": 10000,
               "default": 1,
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/Object"
-                }
-              ]
+              "type": "integer"
             }
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "minimum": 1,
               "maximum": 30,
               "default": 30,
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/Object"
-                }
-              ]
+              "type": "integer"
             }
           },
           {
@@ -4148,10 +4140,6 @@
           "avgCycleLen",
           "avgPeriodLen"
         ]
-      },
-      "Object": {
-        "type": "object",
-        "properties": {}
       },
       "ExerciseListItemDto": {
         "type": "object",
