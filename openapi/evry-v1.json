@@ -3,24 +3,49 @@
   "paths": {
     "/api/v1/auth/register": {
       "post": {
-        "operationId": "AuthController_register",
+        "operationId": "webRegister",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RegisterDto"
+                "$ref": "#/components/schemas/RegisterInput"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": ""
+            "headers": {
+              "Set-Cookie": {
+                "description": "Sets the HttpOnly evry_refresh browser session cookie.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessToken"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The email is already registered.",
             "content": {
               "application/json": {
                 "schema": {
@@ -50,6 +75,8 @@
             }
           }
         },
+        "security": [],
+        "summary": "",
         "tags": [
           "Auth"
         ]
@@ -57,24 +84,49 @@
     },
     "/api/v1/auth/login": {
       "post": {
-        "operationId": "AuthController_login",
+        "operationId": "webLogin",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/LoginDto"
+                "$ref": "#/components/schemas/LoginInput"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": ""
+            "headers": {
+              "Set-Cookie": {
+                "description": "Sets the HttpOnly evry_refresh browser session cookie.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessToken"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials.",
             "content": {
               "application/json": {
                 "schema": {
@@ -104,6 +156,8 @@
             }
           }
         },
+        "security": [],
+        "summary": "",
         "tags": [
           "Auth"
         ]
@@ -111,14 +165,40 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "operationId": "AuthController_refresh",
+        "description": "Rotates the refresh token stored in the HttpOnly evry_refresh cookie.",
+        "operationId": "webRefresh",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "headers": {
+              "Set-Cookie": {
+                "description": "Sets the HttpOnly evry_refresh browser session cookie.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessToken"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid browser session.",
             "content": {
               "application/json": {
                 "schema": {
@@ -148,6 +228,12 @@
             }
           }
         },
+        "security": [
+          {
+            "refreshCookie": []
+          }
+        ],
+        "summary": "",
         "tags": [
           "Auth"
         ]
@@ -155,11 +241,27 @@
     },
     "/api/v1/auth/logout": {
       "post": {
-        "operationId": "AuthController_logout",
+        "description": "Revokes the cookie session when present and always clears the browser refresh cookie.",
+        "operationId": "webLogout",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "headers": {
+              "Set-Cookie": {
+                "description": "Clears the evry_refresh browser session cookie.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -192,6 +294,13 @@
             }
           }
         },
+        "security": [
+          {
+            "refreshCookie": []
+          },
+          {}
+        ],
+        "summary": "",
         "tags": [
           "Auth"
         ]
@@ -199,7 +308,7 @@
     },
     "/api/v1/auth/me": {
       "get": {
-        "operationId": "AuthController_me",
+        "operationId": "authenticatedUser",
         "parameters": [],
         "responses": {
           "200": {
@@ -207,13 +316,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/AuthUser"
                 }
               }
             }
           },
           "400": {
             "description": "Solicitud inválida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid access token is required.",
             "content": {
               "application/json": {
                 "schema": {
@@ -243,6 +362,12 @@
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "",
         "tags": [
           "Auth"
         ]
@@ -250,24 +375,41 @@
     },
     "/api/v1/auth/mobile/login": {
       "post": {
-        "operationId": "MobileAuthController_login",
+        "operationId": "mobileLogin",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/LoginDto"
+                "$ref": "#/components/schemas/LoginInput"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileTokens"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials.",
             "content": {
               "application/json": {
                 "schema": {
@@ -297,31 +439,50 @@
             }
           }
         },
+        "security": [],
+        "summary": "",
         "tags": [
-          "MobileAuth"
+          "Auth"
         ]
       }
     },
     "/api/v1/auth/mobile/refresh": {
       "post": {
-        "operationId": "MobileAuthController_refresh",
+        "operationId": "mobileRefresh",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RefreshTokenDto"
+                "$ref": "#/components/schemas/RefreshInput"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileTokens"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expired or invalid mobile refresh token.",
             "content": {
               "application/json": {
                 "schema": {
@@ -351,28 +512,37 @@
             }
           }
         },
+        "security": [],
+        "summary": "",
         "tags": [
-          "MobileAuth"
+          "Auth"
         ]
       }
     },
     "/api/v1/auth/mobile/logout": {
       "post": {
-        "operationId": "MobileAuthController_logout",
+        "operationId": "mobileLogout",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RefreshTokenDto"
+                "$ref": "#/components/schemas/RefreshInput"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -405,18 +575,27 @@
             }
           }
         },
+        "security": [],
+        "summary": "",
         "tags": [
-          "MobileAuth"
+          "Auth"
         ]
       }
     },
     "/api/v1/users/me": {
       "get": {
-        "operationId": "UsersController_me",
+        "operationId": "currentUser",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -430,6 +609,16 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The user profile no longer exists.",
             "content": {
               "application/json": {
                 "schema": {
@@ -459,31 +648,39 @@
             }
           }
         },
-        "tags": [
-          "Users"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "summary": "",
+        "tags": [
+          "Users"
         ]
       },
       "patch": {
-        "operationId": "UsersController_update",
+        "operationId": "updateCurrentUser",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateUserDto"
+                "$ref": "#/components/schemas/UserUpdateInput"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatedUser"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -497,6 +694,16 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The user profile no longer exists.",
             "content": {
               "application/json": {
                 "schema": {
@@ -526,13 +733,14 @@
             }
           }
         },
-        "tags": [
-          "Users"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "summary": "",
+        "tags": [
+          "Users"
         ]
       }
     },
@@ -728,7 +936,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExerciseDetail"
                 }
               }
             }
@@ -803,7 +1011,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExerciseDetail"
                 }
               }
             }
@@ -872,7 +1080,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -934,7 +1149,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateWorkoutDto"
+                "$ref": "#/components/schemas/CreateWorkoutInput"
               }
             }
           }
@@ -945,7 +1160,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Workout"
                 }
               }
             }
@@ -962,6 +1177,16 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Rutina no encontrada.",
             "content": {
               "application/json": {
                 "schema": {
@@ -991,13 +1216,13 @@
             }
           }
         },
-        "tags": [
-          "Workouts"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "workouts"
         ]
       },
       "get": {
@@ -1008,7 +1233,8 @@
             "required": false,
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer",
+              "default": 20
             }
           },
           {
@@ -1016,7 +1242,8 @@
             "required": false,
             "in": "query",
             "schema": {
-              "type": "string"
+              "type": "integer",
+              "default": 0
             }
           }
         ],
@@ -1026,7 +1253,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Workout"
+                  }
                 }
               }
             }
@@ -1072,13 +1302,13 @@
             }
           }
         },
-        "tags": [
-          "Workouts"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "workouts"
         ]
       }
     },
@@ -1101,7 +1331,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Workout"
                 }
               }
             }
@@ -1118,6 +1348,26 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1147,13 +1397,13 @@
             }
           }
         },
-        "tags": [
-          "Workouts"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "workouts"
         ]
       },
       "patch": {
@@ -1173,7 +1423,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateWorkoutDto"
+                "$ref": "#/components/schemas/UpdateWorkoutInput"
               }
             }
           }
@@ -1184,7 +1434,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Workout"
                 }
               }
             }
@@ -1201,6 +1451,26 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1230,13 +1500,13 @@
             }
           }
         },
-        "tags": [
-          "Workouts"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "workouts"
         ]
       },
       "delete": {
@@ -1253,7 +1523,25 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -1267,6 +1555,26 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1296,13 +1604,13 @@
             }
           }
         },
-        "tags": [
-          "Workouts"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "workouts"
         ]
       }
     },
@@ -1324,7 +1632,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/FinishWorkoutDto"
+                "$ref": "#/components/schemas/FinishWorkoutInput"
               }
             }
           }
@@ -1335,7 +1643,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Workout"
                 }
               }
             }
@@ -1352,6 +1660,26 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1381,13 +1709,13 @@
             }
           }
         },
-        "tags": [
-          "Workouts"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "workouts"
         ]
       }
     },
@@ -1410,7 +1738,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Workout"
                 }
               }
             }
@@ -1427,6 +1755,26 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1456,13 +1804,13 @@
             }
           }
         },
-        "tags": [
-          "Workouts"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "workouts"
         ]
       }
     },
@@ -1484,7 +1832,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateSetDto"
+                "$ref": "#/components/schemas/CreateSetInput"
               }
             }
           }
@@ -1495,7 +1843,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/WorkoutSet"
                 }
               }
             }
@@ -1512,6 +1860,26 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1541,13 +1909,13 @@
             }
           }
         },
-        "tags": [
-          "Workouts"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "workouts"
         ]
       }
     },
@@ -1569,7 +1937,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateSetDto"
+                "$ref": "#/components/schemas/UpdateSetInput"
               }
             }
           }
@@ -1580,7 +1948,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/WorkoutSet"
                 }
               }
             }
@@ -1597,6 +1965,26 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1626,13 +2014,13 @@
             }
           }
         },
-        "tags": [
-          "Workouts"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "workouts"
         ]
       },
       "delete": {
@@ -1649,7 +2037,25 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -1663,6 +2069,26 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1692,13 +2118,13 @@
             }
           }
         },
-        "tags": [
-          "Workouts"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "workouts"
         ]
       }
     },
@@ -1711,14 +2137,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpsertCycleEntryDto"
+                "$ref": "#/components/schemas/CycleEntryInput"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Registro del ciclo creado o actualizado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CycleEntry"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -1762,7 +2195,7 @@
           }
         },
         "tags": [
-          "Cycle"
+          "cycle"
         ],
         "security": [
           {
@@ -1777,7 +2210,9 @@
             "name": "from",
             "required": false,
             "in": "query",
+            "description": "Inicio inclusivo del rango de fechas civiles.",
             "schema": {
+              "format": "date",
               "type": "string"
             }
           },
@@ -1785,14 +2220,26 @@
             "name": "to",
             "required": false,
             "in": "query",
+            "description": "Fin inclusivo del rango de fechas civiles; no admite fechas futuras.",
             "schema": {
+              "format": "date",
               "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Hasta 180 registros, ordenados por fecha descendente.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CycleEntry"
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -1836,7 +2283,7 @@
           }
         },
         "tags": [
-          "Cycle"
+          "cycle"
         ],
         "security": [
           {
@@ -1851,11 +2298,17 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "",
+            "description": "Contexto estimado del ciclo, o null si no hay seguimiento voluntario o inicios registrados.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/CyclePhaseInfo"
+                    }
+                  ]
                 }
               }
             }
@@ -1902,7 +2355,7 @@
           }
         },
         "tags": [
-          "Cycle"
+          "cycle"
         ],
         "security": [
           {
@@ -1919,6 +2372,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Identificador del registro del ciclo.",
             "schema": {
               "type": "string"
             }
@@ -1926,7 +2380,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Registro eliminado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCycleEntryResult"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -1940,6 +2401,16 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El registro no existe o no pertenece al usuario.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1970,7 +2441,7 @@
           }
         },
         "tags": [
-          "Cycle"
+          "cycle"
         ],
         "security": [
           {
@@ -1985,7 +2456,7 @@
         "parameters": [
           {
             "name": "period",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "default": "30d",
@@ -2006,7 +2477,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ProgressOverview"
                 }
               }
             }
@@ -2052,13 +2523,13 @@
             }
           }
         },
-        "tags": [
-          "Progress"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "progress"
         ]
       }
     },
@@ -2070,7 +2541,9 @@
             "name": "from",
             "required": true,
             "in": "query",
+            "description": "Inicio inclusivo del rango; máximo 62 días hasta to.",
             "schema": {
+              "format": "date",
               "type": "string"
             }
           },
@@ -2078,7 +2551,9 @@
             "name": "to",
             "required": true,
             "in": "query",
+            "description": "Final inclusivo; no puede superar el día actual en America/Bogota.",
             "schema": {
+              "format": "date",
               "type": "string"
             }
           }
@@ -2089,7 +2564,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ProgressActivity"
                 }
               }
             }
@@ -2135,13 +2610,13 @@
             }
           }
         },
-        "tags": [
-          "Progress"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "progress"
         ]
       }
     },
@@ -2159,7 +2634,7 @@
           },
           {
             "name": "period",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "default": "30d",
@@ -2177,6 +2652,7 @@
             "name": "cursor",
             "required": false,
             "in": "query",
+            "description": "Cursor opaco; no combinar con page distinto de 1.",
             "schema": {
               "minLength": 1,
               "maxLength": 512,
@@ -2185,31 +2661,23 @@
           },
           {
             "name": "page",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "minimum": 1,
               "default": 1,
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/Object"
-                }
-              ]
+              "type": "integer"
             }
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "minimum": 1,
               "maximum": 25,
               "default": 10,
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/Object"
-                }
-              ]
+              "type": "integer"
             }
           }
         ],
@@ -2219,7 +2687,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExerciseProgress"
                 }
               }
             }
@@ -2236,6 +2704,16 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ejercicio no encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2265,13 +2743,13 @@
             }
           }
         },
-        "tags": [
-          "Progress"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "progress"
         ]
       }
     },
@@ -2289,7 +2767,7 @@
           },
           {
             "name": "period",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "default": "30d",
@@ -2307,6 +2785,7 @@
             "name": "cursor",
             "required": false,
             "in": "query",
+            "description": "Cursor opaco; no combinar con page distinto de 1.",
             "schema": {
               "minLength": 1,
               "maxLength": 512,
@@ -2315,31 +2794,23 @@
           },
           {
             "name": "page",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "minimum": 1,
               "default": 1,
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/Object"
-                }
-              ]
+              "type": "integer"
             }
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "minimum": 1,
               "maximum": 25,
               "default": 10,
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/Object"
-                }
-              ]
+              "type": "integer"
             }
           }
         ],
@@ -2349,7 +2820,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExerciseProgress"
                 }
               }
             }
@@ -2366,6 +2837,16 @@
           },
           "401": {
             "description": "Autenticación requerida.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ejercicio no encontrado.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2395,13 +2876,13 @@
             }
           }
         },
-        "tags": [
-          "Progress"
-        ],
         "security": [
           {
             "bearer": []
           }
+        ],
+        "tags": [
+          "progress"
         ]
       }
     },
@@ -2413,6 +2894,7 @@
             "name": "exerciseId",
             "required": true,
             "in": "path",
+            "description": "Identificador del ejercicio para consultar el historial comparable.",
             "schema": {
               "type": "string"
             }
@@ -2420,11 +2902,11 @@
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "Recomendación de carga y repeticiones basada en sesiones completadas y estado diario.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/AdaptiveRecommendation"
                 }
               }
             }
@@ -2471,7 +2953,7 @@
           }
         },
         "tags": [
-          "Adaptive"
+          "adaptive"
         ],
         "security": [
           {
@@ -2489,14 +2971,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CheckinBody"
+                "$ref": "#/components/schemas/ReadinessInput"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Estado diario creado o actualizado para la fecha civil de hoy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -2540,7 +3029,7 @@
           }
         },
         "tags": [
-          "Readiness"
+          "readiness"
         ],
         "security": [
           {
@@ -2555,7 +3044,20 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Estado de la fecha civil de hoy, o null si todavía no se registró.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Readiness"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -2599,7 +3101,7 @@
           }
         },
         "tags": [
-          "Readiness"
+          "readiness"
         ],
         "security": [
           {
@@ -2620,7 +3122,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "type": "object"
+                    "$ref": "#/components/schemas/Routine"
                   }
                 }
               }
@@ -2695,7 +3197,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Routine"
                 }
               }
             }
@@ -2770,7 +3272,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Routine"
                 }
               }
             }
@@ -2853,7 +3355,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Routine"
                 }
               }
             }
@@ -2922,7 +3424,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -2994,7 +3503,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Workout"
                 }
               }
             }
@@ -3056,7 +3565,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "El proceso está vivo.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthLiveness"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -3101,7 +3617,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "El proceso y PostgreSQL están disponibles.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthReadiness"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -3132,6 +3655,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "El servicio de datos no está disponible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           }
         },
         "summary": "Confirma que el proceso y PostgreSQL están disponibles",
@@ -3149,14 +3682,21 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SyncWorkoutDto"
+                "$ref": "#/components/schemas/SyncWorkoutInput"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncWorkoutResult"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -3174,6 +3714,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ejercicio o rutina no encontrados.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto de revisión o de sesión activa; incluye la versión canónica o null si no existe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiError"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "serverVersion"
+                      ],
+                      "properties": {
+                        "serverVersion": {
+                          "nullable": true,
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/SyncCanonicalWorkout"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -3225,38 +3805,52 @@
         "scheme": "bearer",
         "bearerFormat": "JWT",
         "type": "http"
+      },
+      "refreshCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "evry_refresh"
       }
     },
     "schemas": {
-      "RegisterDto": {
+      "RegisterInput": {
         "type": "object",
         "properties": {
           "email": {
             "type": "string",
             "maxLength": 254,
-            "format": "email"
+            "format": "email",
+            "description": "Trimmed and lowercased before registration."
           },
           "password": {
             "type": "string",
             "minLength": 8,
-            "maxLength": 128
+            "maxLength": 128,
+            "writeOnly": true
           },
           "name": {
             "type": "string",
             "minLength": 2,
-            "maxLength": 100
+            "maxLength": 100,
+            "description": "Leading and trailing whitespace is removed before validation."
           },
           "biologicalSex": {
-            "type": "string",
             "enum": [
               "MALE",
               "FEMALE",
               "OTHER",
               "PREFER_NOT_SAY"
-            ]
+            ],
+            "type": "string",
+            "nullable": true,
+            "default": "PREFER_NOT_SAY",
+            "description": "Omitted or null values use PREFER_NOT_SAY."
           },
           "trackCycle": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true,
+            "default": false,
+            "description": "Omitted or null values disable cycle tracking."
           }
         },
         "required": [
@@ -3265,17 +3859,30 @@
           "name"
         ]
       },
-      "LoginDto": {
+      "AccessToken": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken"
+        ]
+      },
+      "LoginInput": {
         "type": "object",
         "properties": {
           "email": {
             "type": "string",
             "maxLength": 254,
-            "format": "email"
+            "format": "email",
+            "description": "Trimmed and lowercased before authentication."
           },
           "password": {
             "type": "string",
-            "maxLength": 128
+            "maxLength": 128,
+            "writeOnly": true
           }
         },
         "required": [
@@ -3283,36 +3890,111 @@
           "password"
         ]
       },
-      "RefreshTokenDto": {
+      "LogoutResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "AuthUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "biologicalSex": {
+            "enum": [
+              "MALE",
+              "FEMALE",
+              "OTHER",
+              "PREFER_NOT_SAY"
+            ],
+            "type": "string"
+          },
+          "trackCycle": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "biologicalSex",
+          "trackCycle"
+        ]
+      },
+      "MobileTokens": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Expiration of the refresh token."
+          }
+        },
+        "required": [
+          "accessToken",
+          "refreshToken",
+          "expiresAt"
+        ]
+      },
+      "RefreshInput": {
         "type": "object",
         "properties": {
           "refreshToken": {
             "type": "string",
             "minLength": 64,
-            "maxLength": 256
+            "maxLength": 256,
+            "writeOnly": true
           }
         },
         "required": [
           "refreshToken"
         ]
       },
-      "UpdateUserDto": {
+      "User": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
           "name": {
             "type": "string"
           },
           "biologicalSex": {
-            "type": "string",
             "enum": [
               "MALE",
               "FEMALE",
               "OTHER",
               "PREFER_NOT_SAY"
-            ]
+            ],
+            "type": "string"
           },
           "birthDate": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
           },
           "goals": {
             "type": "array",
@@ -3332,16 +4014,140 @@
             "type": "boolean"
           },
           "avgCycleLen": {
-            "type": "number",
+            "type": "integer"
+          },
+          "avgPeriodLen": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "biologicalSex",
+          "birthDate",
+          "goals",
+          "trackCycle",
+          "avgCycleLen",
+          "avgPeriodLen",
+          "createdAt"
+        ]
+      },
+      "UserUpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "biologicalSex": {
+            "enum": [
+              "MALE",
+              "FEMALE",
+              "OTHER",
+              "PREFER_NOT_SAY"
+            ],
+            "type": "string"
+          },
+          "birthDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO 8601 date or date-time. Omitted or null values leave the current birth date unchanged."
+          },
+          "goals": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "STRENGTH",
+                "HYPERTROPHY",
+                "ENDURANCE",
+                "FAT_LOSS",
+                "GENERAL_FITNESS",
+                "MOBILITY"
+              ]
+            }
+          },
+          "trackCycle": {
+            "type": "boolean"
+          },
+          "avgCycleLen": {
+            "type": "integer",
             "minimum": 20,
             "maximum": 45
           },
           "avgPeriodLen": {
-            "type": "number",
+            "type": "integer",
             "minimum": 2,
             "maximum": 10
           }
         }
+      },
+      "UpdatedUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "name": {
+            "type": "string"
+          },
+          "biologicalSex": {
+            "enum": [
+              "MALE",
+              "FEMALE",
+              "OTHER",
+              "PREFER_NOT_SAY"
+            ],
+            "type": "string"
+          },
+          "birthDate": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "goals": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "STRENGTH",
+                "HYPERTROPHY",
+                "ENDURANCE",
+                "FAT_LOSS",
+                "GENERAL_FITNESS",
+                "MOBILITY"
+              ]
+            }
+          },
+          "trackCycle": {
+            "type": "boolean"
+          },
+          "avgCycleLen": {
+            "type": "integer"
+          },
+          "avgPeriodLen": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "biologicalSex",
+          "birthDate",
+          "goals",
+          "trackCycle",
+          "avgCycleLen",
+          "avgPeriodLen"
+        ]
       },
       "Object": {
         "type": "object",
@@ -3517,6 +4323,192 @@
           "hasMore"
         ]
       },
+      "ExerciseDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "muscleGroup": {
+            "enum": [
+              "CHEST",
+              "BACK",
+              "SHOULDERS",
+              "BICEPS",
+              "TRICEPS",
+              "FOREARMS",
+              "CORE",
+              "QUADS",
+              "HAMSTRINGS",
+              "GLUTES",
+              "CALVES",
+              "FULL_BODY",
+              "CARDIO"
+            ],
+            "type": "string"
+          },
+          "equipment": {
+            "enum": [
+              "BARBELL",
+              "DUMBBELL",
+              "MACHINE",
+              "CABLE",
+              "BODYWEIGHT",
+              "KETTLEBELL",
+              "BAND",
+              "OTHER"
+            ],
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "nullable": true
+          },
+          "bodyPart": {
+            "type": "string",
+            "nullable": true
+          },
+          "target": {
+            "type": "string",
+            "nullable": true
+          },
+          "secondaryMuscles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "equipmentLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "isCustom": {
+            "type": "boolean"
+          },
+          "ownerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "isCompound": {
+            "type": "boolean"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "mediaId": {
+            "type": "string",
+            "nullable": true
+          },
+          "imagePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "gifPath": {
+            "type": "string",
+            "nullable": true
+          },
+          "attribution": {
+            "type": "string",
+            "nullable": true
+          },
+          "instructions": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": true
+              },
+              {
+                "type": "array",
+                "items": {}
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "instructionSteps": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": true
+              },
+              {
+                "type": "array",
+                "items": {}
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "gifUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "sourceId",
+          "name",
+          "muscleGroup",
+          "equipment",
+          "category",
+          "bodyPart",
+          "target",
+          "secondaryMuscles",
+          "equipmentLabel",
+          "isCustom",
+          "ownerId",
+          "isCompound",
+          "tags",
+          "description",
+          "mediaId",
+          "imagePath",
+          "gifPath",
+          "attribution",
+          "instructions",
+          "instructionSteps",
+          "createdAt",
+          "imageUrl",
+          "gifUrl"
+        ]
+      },
       "CreateExerciseDto": {
         "type": "object",
         "properties": {
@@ -3573,7 +4565,18 @@
           "muscleGroup"
         ]
       },
-      "CreateWorkoutDto": {
+      "Ok": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "CreateWorkoutInput": {
         "type": "object",
         "properties": {
           "name": {
@@ -3591,7 +4594,491 @@
           "name"
         ]
       },
-      "UpdateWorkoutDto": {
+      "ExerciseEntity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "muscleGroup": {
+            "enum": [
+              "CHEST",
+              "BACK",
+              "SHOULDERS",
+              "BICEPS",
+              "TRICEPS",
+              "FOREARMS",
+              "CORE",
+              "QUADS",
+              "HAMSTRINGS",
+              "GLUTES",
+              "CALVES",
+              "FULL_BODY",
+              "CARDIO"
+            ],
+            "type": "string"
+          },
+          "equipment": {
+            "enum": [
+              "BARBELL",
+              "DUMBBELL",
+              "MACHINE",
+              "CABLE",
+              "BODYWEIGHT",
+              "KETTLEBELL",
+              "BAND",
+              "OTHER"
+            ],
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "nullable": true
+          },
+          "bodyPart": {
+            "type": "string",
+            "nullable": true
+          },
+          "target": {
+            "type": "string",
+            "nullable": true
+          },
+          "secondaryMuscles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "equipmentLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "isCustom": {
+            "type": "boolean"
+          },
+          "ownerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "isCompound": {
+            "type": "boolean"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "mediaId": {
+            "type": "string",
+            "nullable": true
+          },
+          "imagePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "gifPath": {
+            "type": "string",
+            "nullable": true
+          },
+          "attribution": {
+            "type": "string",
+            "nullable": true
+          },
+          "instructions": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": true
+              },
+              {
+                "type": "array",
+                "items": {}
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "instructionSteps": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": true
+              },
+              {
+                "type": "array",
+                "items": {}
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "sourceId",
+          "name",
+          "muscleGroup",
+          "equipment",
+          "category",
+          "bodyPart",
+          "target",
+          "secondaryMuscles",
+          "equipmentLabel",
+          "isCustom",
+          "ownerId",
+          "isCompound",
+          "tags",
+          "description",
+          "mediaId",
+          "imagePath",
+          "gifPath",
+          "attribution",
+          "instructions",
+          "instructionSteps",
+          "createdAt"
+        ]
+      },
+      "WorkoutSet": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workoutId": {
+            "type": "string"
+          },
+          "exerciseId": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "weightKg": {
+            "type": "number",
+            "nullable": true
+          },
+          "reps": {
+            "type": "integer",
+            "nullable": true
+          },
+          "durationS": {
+            "type": "integer",
+            "nullable": true
+          },
+          "rpe": {
+            "type": "integer",
+            "nullable": true
+          },
+          "isWarmup": {
+            "type": "boolean"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "clientMutationId": {
+            "type": "string",
+            "nullable": true
+          },
+          "clientId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "techniqueStable": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "exercise": {
+            "$ref": "#/components/schemas/ExerciseEntity"
+          }
+        },
+        "required": [
+          "id",
+          "workoutId",
+          "exerciseId",
+          "order",
+          "weightKg",
+          "reps",
+          "durationS",
+          "rpe",
+          "isWarmup",
+          "completedAt",
+          "clientMutationId",
+          "clientId",
+          "revision",
+          "techniqueStable",
+          "updatedAt",
+          "exercise"
+        ]
+      },
+      "RoutineExercise": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "routineId": {
+            "type": "string"
+          },
+          "exerciseId": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "targetSets": {
+            "type": "integer"
+          },
+          "targetReps": {
+            "type": "integer",
+            "nullable": true
+          },
+          "targetWeightKg": {
+            "type": "number",
+            "nullable": true
+          },
+          "seriesPlan": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": true
+              },
+              {
+                "type": "array",
+                "items": {}
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "description": "JSON de objetivos por serie conservado del catálogo de rutinas; puede ser null en rutinas anteriores."
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "exercise": {
+            "$ref": "#/components/schemas/ExerciseEntity"
+          }
+        },
+        "required": [
+          "id",
+          "routineId",
+          "exerciseId",
+          "order",
+          "targetSets",
+          "targetReps",
+          "targetWeightKg",
+          "seriesPlan",
+          "notes",
+          "exercise"
+        ]
+      },
+      "Routine": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "dayOfWeek": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 6
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "exercises": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineExercise"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "dayOfWeek",
+          "notes",
+          "createdAt",
+          "updatedAt",
+          "exercises"
+        ]
+      },
+      "Workout": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "cancelledAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "status": {
+            "enum": [
+              "ACTIVE",
+              "COMPLETED",
+              "CANCELLED"
+            ],
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "lastSyncId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "cyclePhase": {
+            "nullable": true,
+            "enum": [
+              "MENSTRUAL",
+              "FOLLICULAR",
+              "OVULATION",
+              "LUTEAL"
+            ],
+            "type": "string"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "routineId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkoutSet"
+            }
+          },
+          "routine": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Routine"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "startedAt",
+          "endedAt",
+          "cancelledAt",
+          "status",
+          "clientId",
+          "lastSyncId",
+          "revision",
+          "cyclePhase",
+          "notes",
+          "routineId",
+          "createdAt",
+          "updatedAt",
+          "sets",
+          "routine"
+        ]
+      },
+      "UpdateWorkoutInput": {
         "type": "object",
         "properties": {
           "name": {
@@ -3603,7 +5090,7 @@
           }
         }
       },
-      "FinishWorkoutDto": {
+      "FinishWorkoutInput": {
         "type": "object",
         "properties": {
           "notes": {
@@ -3611,14 +5098,14 @@
           }
         }
       },
-      "CreateSetDto": {
+      "CreateSetInput": {
         "type": "object",
         "properties": {
           "exerciseId": {
             "type": "string"
           },
           "order": {
-            "type": "number",
+            "type": "integer",
             "minimum": 0
           },
           "weightKg": {
@@ -3626,15 +5113,15 @@
             "minimum": 0
           },
           "reps": {
-            "type": "number",
+            "type": "integer",
             "minimum": 0
           },
           "durationS": {
-            "type": "number",
+            "type": "integer",
             "minimum": 0
           },
           "rpe": {
-            "type": "number",
+            "type": "integer",
             "minimum": 1,
             "maximum": 10
           },
@@ -3655,7 +5142,7 @@
           "clientMutationId"
         ]
       },
-      "UpdateSetDto": {
+      "UpdateSetInput": {
         "type": "object",
         "properties": {
           "weightKg": {
@@ -3664,17 +5151,17 @@
             "minimum": 0
           },
           "reps": {
-            "type": "number",
+            "type": "integer",
             "nullable": true,
             "minimum": 0
           },
           "durationS": {
-            "type": "number",
+            "type": "integer",
             "nullable": true,
             "minimum": 0
           },
           "rpe": {
-            "type": "number",
+            "type": "integer",
             "nullable": true,
             "minimum": 1,
             "maximum": 10
@@ -3688,49 +5175,102 @@
           }
         }
       },
-      "UpsertCycleEntryDto": {
+      "CyclePhaseInfo": {
+        "type": "object",
+        "properties": {
+          "phase": {
+            "enum": [
+              "MENSTRUAL",
+              "FOLLICULAR",
+              "OVULATION",
+              "LUTEAL"
+            ],
+            "type": "string"
+          },
+          "dayOfCycle": {
+            "type": "integer"
+          },
+          "cycleLength": {
+            "type": "integer"
+          },
+          "nextPeriodStart": {
+            "type": "string",
+            "nullable": true,
+            "format": "date"
+          },
+          "trainingHint": {
+            "type": "string"
+          },
+          "intensityCap": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "volumeCap": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "phase",
+          "dayOfCycle",
+          "cycleLength",
+          "nextPeriodStart",
+          "trainingHint",
+          "intensityCap",
+          "volumeCap"
+        ]
+      },
+      "CycleEntryInput": {
         "type": "object",
         "properties": {
           "date": {
             "type": "string",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "format": "date"
           },
           "previousDate": {
             "type": "string",
-            "description": "Fecha original cuando se edita un registro y se mueve de día.",
-            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            "description": "Fecha original cuando se mueve un registro a otro día.",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "format": "date"
           },
           "flow": {
-            "type": "string",
             "enum": [
               "NONE",
               "SPOTTING",
               "LIGHT",
               "MEDIUM",
               "HEAVY"
-            ]
+            ],
+            "type": "string"
           },
           "symptoms": {
-            "maxItems": 30,
             "type": "array",
+            "maxLength": 80,
+            "maxItems": 30,
             "items": {
               "type": "string",
               "maxLength": 80
             }
           },
           "energy": {
-            "type": "number",
+            "type": "integer",
             "minimum": 1,
-            "maximum": 5
+            "maximum": 5,
+            "nullable": true
           },
           "mood": {
-            "type": "number",
+            "type": "integer",
             "minimum": 1,
-            "maximum": 5
+            "maximum": 5,
+            "nullable": true
           },
           "notes": {
             "type": "string",
-            "maxLength": 2000
+            "maxLength": 2000,
+            "nullable": true
           },
           "isPeriodStart": {
             "type": "boolean"
@@ -3740,9 +5280,895 @@
           "date"
         ]
       },
-      "CheckinBody": {
+      "CycleEntry": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fecha civil persistida y serializada como medianoche UTC."
+          },
+          "flow": {
+            "enum": [
+              "NONE",
+              "SPOTTING",
+              "LIGHT",
+              "MEDIUM",
+              "HEAVY"
+            ],
+            "type": "string"
+          },
+          "symptoms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "energy": {
+            "type": "integer",
+            "nullable": true
+          },
+          "mood": {
+            "type": "integer",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "isPeriodStart": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "date",
+          "flow",
+          "symptoms",
+          "energy",
+          "mood",
+          "notes",
+          "isPeriodStart"
+        ]
+      },
+      "DeleteCycleEntryResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "ProgressPeriodWindow": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "enum": [
+              "30d",
+              "90d",
+              "6m",
+              "1y",
+              "all"
+            ],
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "nullable": true,
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "format": "date"
+          },
+          "timezone": {
+            "type": "string",
+            "enum": [
+              "America/Bogota"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "from",
+          "to",
+          "timezone"
+        ]
+      },
+      "OverviewMetrics": {
+        "type": "object",
+        "properties": {
+          "sessionsCompleted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "volumeKg": {
+            "type": "number",
+            "minimum": 0
+          },
+          "activeDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "weeklyFrequency": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "sessionsCompleted",
+          "volumeKg",
+          "activeDays",
+          "weeklyFrequency"
+        ]
+      },
+      "OverviewMetricDelta": {
+        "type": "object",
+        "properties": {
+          "sessionsCompleted": {
+            "type": "integer"
+          },
+          "volumeKg": {
+            "type": "number"
+          },
+          "activeDays": {
+            "type": "integer"
+          },
+          "weeklyFrequency": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "sessionsCompleted",
+          "volumeKg",
+          "activeDays",
+          "weeklyFrequency"
+        ]
+      },
+      "OverviewComparison": {
+        "type": "object",
+        "properties": {
+          "previous": {
+            "$ref": "#/components/schemas/OverviewMetrics"
+          },
+          "delta": {
+            "$ref": "#/components/schemas/OverviewMetricDelta"
+          }
+        },
+        "required": [
+          "previous",
+          "delta"
+        ]
+      },
+      "ProgressRecord": {
+        "type": "object",
+        "properties": {
+          "exerciseId": {
+            "type": "string"
+          },
+          "exerciseName": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "WEIGHT",
+              "REPS",
+              "ESTIMATED_1RM"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          },
+          "achievedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "exerciseId",
+          "exerciseName",
+          "kind",
+          "value",
+          "achievedAt"
+        ]
+      },
+      "MuscleDistribution": {
+        "type": "object",
+        "properties": {
+          "muscleGroup": {
+            "enum": [
+              "CHEST",
+              "BACK",
+              "SHOULDERS",
+              "BICEPS",
+              "TRICEPS",
+              "FOREARMS",
+              "CORE",
+              "QUADS",
+              "HAMSTRINGS",
+              "GLUTES",
+              "CALVES",
+              "FULL_BODY",
+              "CARDIO"
+            ],
+            "type": "string"
+          },
+          "workingSets": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "percentage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "muscleGroup",
+          "workingSets",
+          "percentage"
+        ]
+      },
+      "ProgressOverview": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "$ref": "#/components/schemas/ProgressPeriodWindow"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/OverviewMetrics"
+          },
+          "comparison": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OverviewComparison"
+              }
+            ]
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProgressRecord"
+            }
+          },
+          "muscleDistribution": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MuscleDistribution"
+            }
+          }
+        },
+        "required": [
+          "period",
+          "summary",
+          "comparison",
+          "records",
+          "muscleDistribution"
+        ]
+      },
+      "ProgressActivitySession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "volumeKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "endedAt",
+          "volumeKg"
+        ]
+      },
+      "ProgressActivityDay": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProgressActivitySession"
+            }
+          }
+        },
+        "required": [
+          "date",
+          "sessions"
+        ]
+      },
+      "ProgressActivity": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "format": "date"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProgressActivityDay"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "days"
+        ]
+      },
+      "BestWeightRecord": {
+        "type": "object",
+        "properties": {
+          "weightKg": {
+            "type": "number"
+          },
+          "achievedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "workoutId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "weightKg",
+          "achievedAt",
+          "workoutId"
+        ]
+      },
+      "RepetitionRecord": {
+        "type": "object",
+        "properties": {
+          "reps": {
+            "type": "integer"
+          },
+          "weightKg": {
+            "type": "number",
+            "nullable": true
+          },
+          "achievedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "workoutId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reps",
+          "weightKg",
+          "achievedAt",
+          "workoutId"
+        ]
+      },
+      "Estimated1RMRecord": {
+        "type": "object",
+        "properties": {
+          "valueKg": {
+            "type": "number"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "reps": {
+            "type": "integer"
+          },
+          "achievedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "workoutId": {
+            "type": "string"
+          },
+          "formula": {
+            "type": "string",
+            "enum": [
+              "EPLEY"
+            ]
+          }
+        },
+        "required": [
+          "valueKg",
+          "weightKg",
+          "reps",
+          "achievedAt",
+          "workoutId",
+          "formula"
+        ]
+      },
+      "ExerciseProgressSummary": {
+        "type": "object",
+        "properties": {
+          "sessionsCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "workingSetsCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "volumeKg": {
+            "type": "number",
+            "minimum": 0
+          },
+          "bestWeight": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BestWeightRecord"
+              }
+            ]
+          },
+          "repetitionRecord": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RepetitionRecord"
+              }
+            ]
+          },
+          "estimated1RM": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Estimated1RMRecord"
+              }
+            ]
+          }
+        },
+        "required": [
+          "sessionsCount",
+          "workingSetsCount",
+          "volumeKg",
+          "bestWeight",
+          "repetitionRecord",
+          "estimated1RM"
+        ]
+      },
+      "ComparisonPeriodWindow": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date"
+          },
+          "to": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      },
+      "ExercisePeriodMetrics": {
+        "type": "object",
+        "properties": {
+          "sessionsCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "workingSetsCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "volumeKg": {
+            "type": "number",
+            "minimum": 0
+          },
+          "bestWeightKg": {
+            "type": "number",
+            "nullable": true
+          },
+          "estimated1RMKg": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "sessionsCount",
+          "workingSetsCount",
+          "volumeKg",
+          "bestWeightKg",
+          "estimated1RMKg"
+        ]
+      },
+      "ExercisePeriodMetricDelta": {
+        "type": "object",
+        "properties": {
+          "sessionsCount": {
+            "type": "integer"
+          },
+          "workingSetsCount": {
+            "type": "integer"
+          },
+          "volumeKg": {
+            "type": "number"
+          },
+          "bestWeightKg": {
+            "type": "number",
+            "nullable": true
+          },
+          "estimated1RMKg": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "sessionsCount",
+          "workingSetsCount",
+          "volumeKg",
+          "bestWeightKg",
+          "estimated1RMKg"
+        ]
+      },
+      "ExerciseProgressComparison": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "$ref": "#/components/schemas/ComparisonPeriodWindow"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/ExercisePeriodMetrics"
+          },
+          "delta": {
+            "$ref": "#/components/schemas/ExercisePeriodMetricDelta"
+          }
+        },
+        "required": [
+          "period",
+          "previous",
+          "delta"
+        ]
+      },
+      "ExerciseProgressPoint": {
+        "type": "object",
+        "properties": {
+          "workoutId": {
+            "type": "string"
+          },
+          "workoutName": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "maxWeightKg": {
+            "type": "number",
+            "nullable": true
+          },
+          "estimated1RMKg": {
+            "type": "number",
+            "nullable": true
+          },
+          "volumeKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "workoutId",
+          "workoutName",
+          "completedAt",
+          "maxWeightKg",
+          "estimated1RMKg",
+          "volumeKg"
+        ]
+      },
+      "ExerciseHistorySet": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "weightKg": {
+            "type": "number",
+            "nullable": true
+          },
+          "reps": {
+            "type": "integer",
+            "nullable": true
+          },
+          "durationS": {
+            "type": "integer",
+            "nullable": true
+          },
+          "rpe": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "order",
+          "weightKg",
+          "reps",
+          "durationS",
+          "rpe",
+          "completedAt"
+        ]
+      },
+      "ExerciseHistorySession": {
+        "type": "object",
+        "properties": {
+          "workoutId": {
+            "type": "string"
+          },
+          "workoutName": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExerciseHistorySet"
+            }
+          }
+        },
+        "required": [
+          "workoutId",
+          "workoutName",
+          "startedAt",
+          "endedAt",
+          "sets"
+        ]
+      },
+      "ExerciseProgressHistory": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExerciseHistorySession"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "limit",
+          "total",
+          "hasMore",
+          "nextCursor"
+        ]
+      },
+      "ExerciseProgress": {
+        "type": "object",
+        "properties": {
+          "exerciseId": {
+            "type": "string"
+          },
+          "period": {
+            "$ref": "#/components/schemas/ProgressPeriodWindow"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ExerciseProgressSummary"
+          },
+          "comparison": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExerciseProgressComparison"
+              }
+            ]
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExerciseProgressPoint"
+            }
+          },
+          "history": {
+            "$ref": "#/components/schemas/ExerciseProgressHistory"
+          }
+        },
+        "required": [
+          "exerciseId",
+          "period",
+          "summary",
+          "comparison",
+          "points",
+          "history"
+        ]
+      },
+      "AdaptiveRecommendation": {
+        "type": "object",
+        "properties": {
+          "exerciseId": {
+            "type": "string"
+          },
+          "targetWeightKg": {
+            "type": "number",
+            "nullable": true
+          },
+          "targetReps": {
+            "type": "integer",
+            "nullable": true
+          },
+          "rationale": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "action": {
+            "enum": [
+              "PROGRESS",
+              "HOLD",
+              "DELOAD"
+            ],
+            "type": "string",
+            "description": "Acción emitida por el recomendador; HOLD también se usa cuando falta historial comparable."
+          }
+        },
+        "required": [
+          "exerciseId",
+          "targetWeightKg",
+          "targetReps",
+          "rationale",
+          "confidence",
+          "action"
+        ]
+      },
+      "Readiness": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "civilDate": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "Fecha civil persistida y serializada como medianoche UTC; puede ser null en registros anteriores."
+          },
+          "sleepHrs": {
+            "type": "number",
+            "nullable": true
+          },
+          "stress": {
+            "type": "integer",
+            "nullable": true
+          },
+          "soreness": {
+            "type": "integer",
+            "nullable": true
+          },
+          "motivation": {
+            "type": "integer",
+            "nullable": true
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "date",
+          "civilDate",
+          "sleepHrs",
+          "stress",
+          "soreness",
+          "motivation",
+          "score"
+        ]
+      },
+      "ReadinessInput": {
+        "type": "object",
+        "properties": {
+          "sleepHrs": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 16,
+            "nullable": true
+          },
+          "stress": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "nullable": true
+          },
+          "soreness": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "nullable": true
+          },
+          "motivation": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "nullable": true
+          }
+        }
       },
       "RoutineSeriesPlanDto": {
         "type": "object",
@@ -3851,7 +6277,42 @@
           }
         }
       },
-      "SyncWorkoutSetDto": {
+      "HealthLiveness": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "HealthReadiness": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "database": {
+            "type": "string",
+            "enum": [
+              "ready"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "database"
+        ]
+      },
+      "SyncWorkoutSetInput": {
         "type": "object",
         "properties": {
           "clientId": {
@@ -3859,7 +6320,7 @@
             "format": "uuid"
           },
           "baseRevision": {
-            "type": "number",
+            "type": "integer",
             "minimum": 0
           },
           "exerciseId": {
@@ -3868,7 +6329,7 @@
             "maxLength": 64
           },
           "order": {
-            "type": "number",
+            "type": "integer",
             "minimum": 0,
             "maximum": 500
           },
@@ -3879,19 +6340,19 @@
             "maximum": 2000
           },
           "reps": {
-            "type": "number",
+            "type": "integer",
             "nullable": true,
             "minimum": 0,
             "maximum": 1000
           },
           "durationS": {
-            "type": "number",
+            "type": "integer",
             "nullable": true,
             "minimum": 0,
             "maximum": 86400
           },
           "rpe": {
-            "type": "number",
+            "type": "integer",
             "nullable": true,
             "minimum": 1,
             "maximum": 10
@@ -3904,7 +6365,9 @@
             "nullable": true
           },
           "completedAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
@@ -3914,7 +6377,7 @@
           "order"
         ]
       },
-      "SyncWorkoutDto": {
+      "SyncWorkoutInput": {
         "type": "object",
         "properties": {
           "clientId": {
@@ -3926,7 +6389,7 @@
             "format": "uuid"
           },
           "baseRevision": {
-            "type": "number",
+            "type": "integer",
             "minimum": 0
           },
           "name": {
@@ -3935,40 +6398,48 @@
             "maxLength": 120
           },
           "startedAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           "endedAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "cancelledAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "status": {
-            "type": "string",
             "enum": [
               "ACTIVE",
               "COMPLETED",
               "CANCELLED"
-            ]
+            ],
+            "type": "string"
           },
           "notes": {
             "type": "string",
-            "maxLength": 2000
+            "maxLength": 2000,
+            "nullable": true
           },
           "routineId": {
             "type": "string",
-            "maxLength": 64
+            "maxLength": 64,
+            "nullable": true
           },
           "sets": {
             "maxItems": 250,
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SyncWorkoutSetDto"
+              "$ref": "#/components/schemas/SyncWorkoutSetInput"
             }
           },
           "deletedSetClientIds": {
-            "maxItems": 250,
             "type": "array",
+            "format": "uuid",
+            "maxItems": 250,
             "items": {
               "type": "string",
               "format": "uuid"
@@ -3984,6 +6455,230 @@
           "status",
           "sets",
           "deletedSetClientIds"
+        ]
+      },
+      "RoutineEntity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "dayOfWeek": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 6
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "dayOfWeek",
+          "notes",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "SyncCanonicalWorkout": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "cancelledAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "status": {
+            "enum": [
+              "ACTIVE",
+              "COMPLETED",
+              "CANCELLED"
+            ],
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "lastSyncId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "cyclePhase": {
+            "nullable": true,
+            "enum": [
+              "MENSTRUAL",
+              "FOLLICULAR",
+              "OVULATION",
+              "LUTEAL"
+            ],
+            "type": "string"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "routineId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkoutSet"
+            }
+          },
+          "routine": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RoutineEntity"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "startedAt",
+          "endedAt",
+          "cancelledAt",
+          "status",
+          "clientId",
+          "lastSyncId",
+          "revision",
+          "cyclePhase",
+          "notes",
+          "routineId",
+          "createdAt",
+          "updatedAt",
+          "sets",
+          "routine"
+        ]
+      },
+      "SyncWorkoutIdentity": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "serverId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientId",
+          "serverId"
+        ]
+      },
+      "SyncSetIdentity": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "serverId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clientId",
+          "serverId",
+          "revision"
+        ]
+      },
+      "SyncWorkoutMapping": {
+        "type": "object",
+        "properties": {
+          "workout": {
+            "$ref": "#/components/schemas/SyncWorkoutIdentity"
+          },
+          "sets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncSetIdentity"
+            }
+          }
+        },
+        "required": [
+          "workout",
+          "sets"
+        ]
+      },
+      "SyncWorkoutResult": {
+        "type": "object",
+        "properties": {
+          "workout": {
+            "$ref": "#/components/schemas/SyncCanonicalWorkout"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/SyncWorkoutMapping"
+          }
+        },
+        "required": [
+          "workout",
+          "revision",
+          "mapping"
         ]
       },
       "ApiError": {

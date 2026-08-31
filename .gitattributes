@@ -1,0 +1,2 @@
+openapi/*.json text eol=lf
+openapi/*.ts text eol=lf

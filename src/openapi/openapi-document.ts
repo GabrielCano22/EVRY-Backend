@@ -22,6 +22,7 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
     .setDescription('API privada de seguimiento de fuerza EVRY')
     .setVersion('1.0')
     .addBearerAuth()
+    .addCookieAuth('evry_refresh', { type: 'apiKey', in: 'cookie', name: 'evry_refresh' }, 'refreshCookie')
     .build();
   const document = SwaggerModule.createDocument(app, config, { ignoreGlobalPrefix: false });
   document.components ??= {};

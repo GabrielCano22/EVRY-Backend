@@ -16,6 +16,13 @@ beforeAll(async () => {
   app = module.createNestApplication();
   app.setGlobalPrefix('api/v1');
 });
+
+it('documents exercise detail, creation and deletion with their real response status', () => {
+  const doc = createOpenApiDocument(app);
+  expect(doc.paths['/api/v1/exercises/{id}'].get?.responses['200']).toMatchObject({ content: { 'application/json': { schema: { $ref: '#/components/schemas/ExerciseDetail' } } } });
+  expect(doc.paths['/api/v1/exercises'].post?.responses['201']).toMatchObject({ content: { 'application/json': { schema: { $ref: '#/components/schemas/ExerciseDetail' } } } });
+  expect(doc.paths['/api/v1/exercises/{id}'].delete?.responses['200']).toMatchObject({ content: { 'application/json': { schema: { $ref: '#/components/schemas/Ok' } } } });
+});
 afterAll(async () => { await app?.close(); });
 
 it('publishes an actual typed paginated catalog with media, metadata and authentication', () => {

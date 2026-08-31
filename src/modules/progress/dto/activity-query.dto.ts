@@ -5,6 +5,7 @@ import {
   type ValidatorConstraintInterface,
 } from 'class-validator';
 import { parseCivilDate } from '../../../common/dates/civil-date';
+import { ApiProperty } from '@nestjs/swagger';
 
 @ValidatorConstraint({ name: 'civilDate', async: false })
 class CivilDateConstraint implements ValidatorConstraintInterface {
@@ -24,9 +25,11 @@ class CivilDateConstraint implements ValidatorConstraintInterface {
 }
 
 export class ActivityQueryDto {
+  @ApiProperty({ type: String, format: 'date', description: 'Inicio inclusivo del rango; máximo 62 días hasta to.' })
   @Validate(CivilDateConstraint)
   from!: string;
 
+  @ApiProperty({ type: String, format: 'date', description: 'Final inclusivo; no puede superar el día actual en America/Bogota.' })
   @Validate(CivilDateConstraint)
   to!: string;
 }

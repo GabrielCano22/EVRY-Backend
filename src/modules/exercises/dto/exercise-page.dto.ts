@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { Equipment, MuscleGroup } from '@prisma/client';
+import { ApiProperty, ApiSchema, OmitType } from '@nestjs/swagger';
+import { Equipment, MuscleGroup, Prisma } from '@prisma/client';
 
 /** Fields actually selected and serialized by the paginated catalog. */
 export class ExerciseListItemDto {
@@ -32,4 +32,27 @@ export class ExercisePageDto {
   @ApiProperty({ type: 'integer', minimum: 1, maximum: 30 }) limit!: number;
   @ApiProperty({ type: 'integer', minimum: 0 }) total!: number;
   @ApiProperty({ type: Boolean }) hasMore!: boolean;
+}
+
+// These two legacy database fields intentionally accept arbitrary JSON.
+export const nullableJsonSchema = {
+  nullable: true,
+  oneOf: [
+    { type: 'object' as const, additionalProperties: true },
+    { type: 'array' as const, items: {} },
+    { type: 'string' as const }, { type: 'number' as const }, { type: 'boolean' as const },
+  ],
+};
+
+@ApiSchema({ name: 'ExerciseEntity' })
+export class ExerciseEntityDto extends OmitType(ExerciseListItemDto, ['imageUrl', 'gifUrl'] as const) {
+  @ApiProperty(nullableJsonSchema) instructions!: Prisma.JsonValue;
+  @ApiProperty(nullableJsonSchema) instructionSteps!: Prisma.JsonValue;
+  @ApiProperty({ type: String, format: 'date-time' }) createdAt!: Date;
+}
+
+@ApiSchema({ name: 'ExerciseDetail' })
+export class ExerciseDetailDto extends ExerciseEntityDto {
+  @ApiProperty({ type: String, nullable: true }) imageUrl!: string | null;
+  @ApiProperty({ type: String, nullable: true }) gifUrl!: string | null;
 }
