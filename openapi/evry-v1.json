@@ -546,6 +546,7 @@
             "in": "query",
             "schema": {
               "minimum": 1,
+              "maximum": 10000,
               "default": 1,
               "allOf": [
                 {
@@ -560,7 +561,7 @@
             "in": "query",
             "schema": {
               "minimum": 1,
-              "maximum": 50,
+              "maximum": 30,
               "default": 30,
               "allOf": [
                 {
@@ -649,7 +650,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Catálogo paginado de ejercicios globales y propios.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExercisePageDto"
+                }
+              }
+            }
           },
           "400": {
             "description": "Solicitud inválida.",
@@ -3338,6 +3346,176 @@
       "Object": {
         "type": "object",
         "properties": {}
+      },
+      "ExerciseListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sourceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "muscleGroup": {
+            "enum": [
+              "CHEST",
+              "BACK",
+              "SHOULDERS",
+              "BICEPS",
+              "TRICEPS",
+              "FOREARMS",
+              "CORE",
+              "QUADS",
+              "HAMSTRINGS",
+              "GLUTES",
+              "CALVES",
+              "FULL_BODY",
+              "CARDIO"
+            ],
+            "type": "string"
+          },
+          "equipment": {
+            "enum": [
+              "BARBELL",
+              "DUMBBELL",
+              "MACHINE",
+              "CABLE",
+              "BODYWEIGHT",
+              "KETTLEBELL",
+              "BAND",
+              "OTHER"
+            ],
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "nullable": true
+          },
+          "bodyPart": {
+            "type": "string",
+            "nullable": true
+          },
+          "target": {
+            "type": "string",
+            "nullable": true
+          },
+          "secondaryMuscles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "equipmentLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "isCustom": {
+            "type": "boolean"
+          },
+          "ownerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "isCompound": {
+            "type": "boolean"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "mediaId": {
+            "type": "string",
+            "nullable": true
+          },
+          "imagePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "gifPath": {
+            "type": "string",
+            "nullable": true
+          },
+          "attribution": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "gifUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "sourceId",
+          "name",
+          "muscleGroup",
+          "equipment",
+          "category",
+          "bodyPart",
+          "target",
+          "secondaryMuscles",
+          "equipmentLabel",
+          "isCustom",
+          "ownerId",
+          "isCompound",
+          "tags",
+          "description",
+          "mediaId",
+          "imagePath",
+          "gifPath",
+          "attribution",
+          "imageUrl",
+          "gifUrl"
+        ]
+      },
+      "ExercisePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExerciseListItemDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "limit",
+          "total",
+          "hasMore"
+        ]
       },
       "CreateExerciseDto": {
         "type": "object",

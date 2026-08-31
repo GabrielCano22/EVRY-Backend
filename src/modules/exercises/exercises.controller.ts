@@ -1,9 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiOkResponse } from '@nestjs/swagger';
 import { ExercisesService } from './exercises.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { ListExercisesDto } from './dto/list-exercises.dto';
+import { ExercisePageDto } from './dto/exercise-page.dto';
 
 @Controller('exercises')
 @UseGuards(JwtAuthGuard)
@@ -11,7 +13,8 @@ export class ExercisesController {
   constructor(private svc: ExercisesService) {}
 
   @Get()
-  list(@CurrentUser() u: AuthUser, @Query() query: ListExercisesDto) {
+  @ApiOkResponse({ type: ExercisePageDto, description: 'Catálogo paginado de ejercicios globales y propios.' })
+  list(@CurrentUser() u: AuthUser, @Query() query: ListExercisesDto): Promise<ExercisePageDto> {
     return this.svc.list(u.id, query);
   }
 
