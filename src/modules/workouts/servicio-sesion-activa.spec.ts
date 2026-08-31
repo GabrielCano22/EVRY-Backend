@@ -122,6 +122,18 @@ describe('ServicioSesionActiva', () => {
       .resolves.toBe(winner);
   });
 
+  it('recovers the winner with the real PostgreSQL Prisma 7 adapter error metadata', async () => {
+    const winner = { id: 'adapter-race-winner', userId: 'user-1', status: 'ACTIVE' };
+    const error = new Prisma.PrismaClientKnownRequestError('unique violation', {
+      clientVersion: '7.10.0', code: 'P2002',
+      meta: { modelName: 'Workout', driverAdapterError: { cause: {
+        kind: 'UniqueConstraintViolation', constraint: { index: 'Workout_userId_status_active_unique' },
+      } } },
+    });
+    const { service } = makeService({ createError: error, activeAfterConflict: winner });
+    await expect(service.iniciarOContinuar('user-1', { name: 'Concurrent start' })).resolves.toBe(winner);
+  });
+
   it('rethrows an expected unique error when no canonical active workout exists', async () => {
     const error = uniqueError(['userId']);
     const { service } = makeService({ createError: error, activeAfterConflict: null });

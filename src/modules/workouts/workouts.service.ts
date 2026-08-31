@@ -4,8 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { uniqueConflictTargets } from '../../prisma/unique-conflict';
 import { findVisibleExerciseOrThrow } from '../exercises/exercise-visibility';
 import {
   CreateSetDto,
@@ -23,14 +23,6 @@ import {
   lockWorkoutLifecycle,
   runSerializableTransaction,
 } from './serializable-transaction';
-
-function uniqueConflictTargets(error: unknown): string[] | null {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
-    return null;
-  }
-  const target = error.meta?.target;
-  return Array.isArray(target) ? target.map(String) : [String(target ?? '')];
-}
 
 function isSetMutationConflict(error: unknown): boolean {
   const targets = uniqueConflictTargets(error);

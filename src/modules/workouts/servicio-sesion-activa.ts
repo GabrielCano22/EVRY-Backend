@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { uniqueConflictTargets } from '../../prisma/unique-conflict';
 import { CycleService } from '../cycle/cycle.service';
 
 export interface StartWorkoutInput {
@@ -25,12 +26,8 @@ export const workoutDetailInclude = Prisma.validator<Prisma.WorkoutInclude>()({
 });
 
 function isActiveWorkoutConflict(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
-    return false;
-  }
-
-  const target = error.meta?.target;
-  const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')];
+  const fields = uniqueConflictTargets(error);
+  if (!fields) return false;
   return fields.includes('userId')
     || fields.includes('Workout_userId_active_unique')
     || fields.includes('Workout_userId_status_active_unique');

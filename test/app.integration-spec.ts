@@ -87,20 +87,20 @@ describe('release invariants database migration', () => {
       FROM pg_indexes
       WHERE schemaname = 'public'
         AND indexname IN (
-          'Workout_userId_active_unique',
+          'Workout_userId_status_active_unique',
           'Workout_userId_endedAt_id_idx',
           'WorkoutSet_workoutId_clientMutationId_key',
           'WorkoutSet_exerciseId_workoutId_completedAt_idx'
         )
     `;
     expect(indexes.map(({ indexname }) => indexname)).toEqual(expect.arrayContaining([
-      'Workout_userId_active_unique',
+      'Workout_userId_status_active_unique',
       'Workout_userId_endedAt_id_idx',
       'WorkoutSet_workoutId_clientMutationId_key',
       'WorkoutSet_exerciseId_workoutId_completedAt_idx',
     ]));
-    expect(indexes.find(({ indexname }) => indexname === 'Workout_userId_active_unique')?.indexdef)
-      .toContain('WHERE (("endedAt" IS NULL) AND ("cancelledAt" IS NULL))');
+    expect(indexes.find(({ indexname }) => indexname === 'Workout_userId_status_active_unique')?.indexdef)
+      .toContain('WHERE (status = \'ACTIVE\'::"WorkoutStatus")');
 
     await prisma.workout.create({ data: { userId, name: 'Active workout' } });
     await expect(
