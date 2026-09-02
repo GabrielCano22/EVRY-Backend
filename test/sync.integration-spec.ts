@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Equipment, MuscleGroup, WorkoutStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { Client } from 'pg';
 import request from 'supertest';
 import { createIntegrationApp } from './helpers/create-integration-app';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -32,6 +33,51 @@ type SyncPayload = {
   sets: SyncSet[];
   deletedSetClientIds: string[];
 };
+
+function testDatabaseUrl(): string {
+  const url = process.env.TEST_DATABASE_URL?.trim();
+  if (!url) throw new Error('TEST_DATABASE_URL must be configured for this integration test.');
+  return url;
+}
+
+async function lockWorkoutLifecycleBarrier(client: Client, userId: string): Promise<void> {
+  await client.query('BEGIN');
+  await client.query(
+    'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+    [`evry:workout-lifecycle:${userId}`],
+  );
+}
+
+async function waitForSyncLockWaiters(client: Client, expectedWaiters: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+
+  while (Date.now() < deadline) {
+    const result = await client.query<{ count: string }>(`
+      SELECT COUNT(*)::text AS count
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND wait_event_type = 'Lock'
+        AND query LIKE '%pg_advisory_xact_lock%'
+    `);
+    if (Number(result.rows[0]?.count) >= expectedWaiters) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  const activity = await client.query<{
+    pid: number;
+    state: string;
+    wait_event_type: string | null;
+    wait_event: string | null;
+    query: string;
+  }>(`
+    SELECT pid, state, wait_event_type, wait_event, query
+    FROM pg_stat_activity
+    WHERE datname = current_database()
+  `);
+  throw new Error(
+    `Timed out waiting for ${expectedWaiters} sync transactions at the lifecycle lock: ${JSON.stringify(activity.rows)}`,
+  );
+}
 
 describe('offline workout synchronization HTTP/PostgreSQL', () => {
   const prefix = `task2-sync-${randomUUID().slice(0, 8)}`;
@@ -72,6 +118,10 @@ describe('offline workout synchronization HTTP/PostgreSQL', () => {
       .post('/api/v1/sync/workouts')
       .set('Authorization', `Bearer ${user.token}`)
       .send(payload);
+  }
+
+  function startSync(user: FixtureUser, payload: SyncPayload): Promise<request.Response> {
+    return sync(user, payload).then((response) => response);
   }
 
   function activePayload(
@@ -206,17 +256,38 @@ describe('offline workout synchronization HTTP/PostgreSQL', () => {
       endedAt: '2026-08-31T13:30:00.000Z',
     });
 
-    const [left, right] = await Promise.all([sync(user, payload), sync(user, payload)]);
-    expect([left.status, right.status]).toEqual([201, 201]);
-    expect(left.body).toMatchObject({
-      revision: 1,
-      workout: { id: right.body.workout.id, revision: 1, status: 'COMPLETED' },
-      mapping: { workout: { serverId: right.body.mapping.workout.serverId } },
-    });
-    await expect(prisma.workout.count({ where: { userId: user.id, clientId: payload.clientId } }))
-      .resolves.toBe(1);
-    await expect(prisma.workoutSet.count({ where: { workoutId: left.body.workout.id } })).resolves.toBe(1);
-  });
+    const barrier = new Client({ connectionString: testDatabaseUrl() });
+    const observer = new Client({ connectionString: testDatabaseUrl() });
+    let deliveries: Array<Promise<request.Response>> = [];
+    await barrier.connect();
+    try {
+      await observer.connect();
+      await lockWorkoutLifecycleBarrier(barrier, user.id);
+      const left = startSync(user, payload);
+      deliveries = [left];
+      await waitForSyncLockWaiters(observer, 1);
+      const right = startSync(user, payload);
+      deliveries = [left, right];
+      await waitForSyncLockWaiters(observer, 2);
+      await barrier.query('COMMIT');
+
+      const [leftResponse, rightResponse] = await Promise.all(deliveries);
+      expect([leftResponse.status, rightResponse.status]).toEqual([201, 201]);
+      expect(leftResponse.body).toMatchObject({
+        revision: 1,
+        workout: { id: rightResponse.body.workout.id, revision: 1, status: 'COMPLETED' },
+        mapping: { workout: { serverId: rightResponse.body.mapping.workout.serverId } },
+      });
+      await expect(prisma.workout.count({ where: { userId: user.id, clientId: payload.clientId } }))
+        .resolves.toBe(1);
+      await expect(prisma.workoutSet.count({ where: { workoutId: leftResponse.body.workout.id } })).resolves.toBe(1);
+    } finally {
+      await barrier.query('ROLLBACK').catch(() => undefined);
+      await Promise.allSettled(deliveries);
+      await observer.end();
+      await barrier.end();
+    }
+  }, 15_000);
 
   it('accepts one concurrent revision and returns the canonical server version to the stale device', async () => {
     const user = await createUser('revision-race');
@@ -234,23 +305,44 @@ describe('offline workout synchronization HTTP/PostgreSQL', () => {
     };
     const rival = { ...payload, syncId: randomUUID(), name: 'Cambio dispositivo B', sets: [{ ...initialSet, baseRevision: 1, reps: 11 }] };
 
-    const [left, right] = await Promise.all([sync(user, payload), sync(user, rival)]);
-    const accepted = left.status === 201 ? left : right;
-    const rejected = left.status === 409 ? left : right;
-    expect([left.status, right.status].sort()).toEqual([201, 409]);
-    expect(accepted.body).toMatchObject({ revision: 2, workout: { revision: 2, status: 'ACTIVE' } });
-    expect(rejected.body).toMatchObject({
-      code: 'REVISION_CONFLICT', retryable: false,
-      serverVersion: { id: accepted.body.workout.id, revision: 2, name: accepted.body.workout.name },
-    });
-    const stored = await prisma.workout.findUniqueOrThrow({
-      where: { id: accepted.body.workout.id }, include: { sets: true },
-    });
-    expect(stored).toMatchObject({ revision: 2, name: accepted.body.workout.name });
-    expect(stored.sets).toEqual(expect.arrayContaining([
-      expect.objectContaining({ clientId: initialSet.clientId, revision: 2, reps: accepted.body.workout.sets[0].reps }),
-    ]));
-  });
+    const barrier = new Client({ connectionString: testDatabaseUrl() });
+    const observer = new Client({ connectionString: testDatabaseUrl() });
+    let deliveries: Array<Promise<request.Response>> = [];
+    await barrier.connect();
+    try {
+      await observer.connect();
+      await lockWorkoutLifecycleBarrier(barrier, user.id);
+      const left = startSync(user, payload);
+      deliveries = [left];
+      await waitForSyncLockWaiters(observer, 1);
+      const right = startSync(user, rival);
+      deliveries = [left, right];
+      await waitForSyncLockWaiters(observer, 2);
+      await barrier.query('COMMIT');
+
+      const [leftResponse, rightResponse] = await Promise.all(deliveries);
+      const accepted = leftResponse.status === 201 ? leftResponse : rightResponse;
+      const rejected = leftResponse.status === 409 ? leftResponse : rightResponse;
+      expect([leftResponse.status, rightResponse.status].sort()).toEqual([201, 409]);
+      expect(accepted.body).toMatchObject({ revision: 2, workout: { revision: 2, status: 'ACTIVE' } });
+      expect(rejected.body).toMatchObject({
+        code: 'REVISION_CONFLICT', retryable: false,
+        serverVersion: { id: accepted.body.workout.id, revision: 2, name: accepted.body.workout.name },
+      });
+      const stored = await prisma.workout.findUniqueOrThrow({
+        where: { id: accepted.body.workout.id }, include: { sets: true },
+      });
+      expect(stored).toMatchObject({ revision: 2, name: accepted.body.workout.name });
+      expect(stored.sets).toEqual(expect.arrayContaining([
+        expect.objectContaining({ clientId: initialSet.clientId, revision: 2, reps: accepted.body.workout.sets[0].reps }),
+      ]));
+    } finally {
+      await barrier.query('ROLLBACK').catch(() => undefined);
+      await Promise.allSettled(deliveries);
+      await observer.end();
+      await barrier.end();
+    }
+  }, 15_000);
 
   it('rejects a second active offline session instead of mixing it with the existing one', async () => {
     const user = await createUser('different-active');
@@ -331,6 +423,9 @@ describe('offline workout synchronization HTTP/PostgreSQL', () => {
 
     const response = await sync(user, payload);
     expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({
+      code: 'NOT_FOUND', retryable: false, requestId: expect.any(String),
+    });
     await expect(prisma.workout.findUnique({
       where: { userId_clientId: { userId: user.id, clientId: payload.clientId } },
     })).resolves.toBeNull();
@@ -402,6 +497,9 @@ describe('offline workout synchronization HTTP/PostgreSQL', () => {
         sets: initialPayload.sets.map((set) => ({ ...set, baseRevision: 1, reps: 99 })),
       });
       expect(blocked.status).toBe(400);
+      expect(blocked.body).toMatchObject({
+        code: 'BAD_REQUEST', retryable: false, requestId: expect.any(String),
+      });
       await expect(prisma.workout.findUniqueOrThrow({
         where: { id: initial.body.workout.id }, include: { sets: true },
       })).resolves.toMatchObject({

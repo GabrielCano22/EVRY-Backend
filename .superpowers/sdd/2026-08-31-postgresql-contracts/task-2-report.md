@@ -35,6 +35,16 @@ autorizara una corrección de producción. Se ajustó el caso de sesión activa 
 ejecución final para afirmar explícitamente el `409 ACTIVE_WORKOUT_CONFLICT`, no una
 coexistencia de sesión terminada.
 
+### Corrección de revisión 1
+
+Las dos carreras ahora retienen el mismo advisory lock de ciclo de vida que usa Sync,
+esperan que PostgreSQL exponga dos transacciones bloqueadas y solo después liberan la
+barrera. La primera versión de esta prueba quedó RED porque los objetos de Supertest no
+inician la solicitud hasta que se esperan; se corrigió el helper de prueba para iniciarla
+antes de observar los waiters. La barrera real quedó GREEN sin `P2034`, `500` ni cambio
+de producción. Los casos de ejercicio ajeno y sesión terminal también validan el error
+uniforme (`code`, `retryable: false` y `requestId`) además de HTTP y filas.
+
 ## Comandos y resultados
 
 Las integraciones se ejecutaron con:
@@ -52,6 +62,9 @@ npm run test:integration -- --runInBand test/sync.integration-spec.ts
 ```
 
 Resultado focal: 1 suite, 10 pruebas aprobadas.
+
+Tras la corrección de revisión 1, el mismo comando focal volvió a aprobar 1 suite y 10
+pruebas con las dos barreras PostgreSQL activas.
 
 Verificación de cierre:
 
@@ -74,7 +87,7 @@ La revisión de alcance confirmó que el diff solo añade la prueba y este repor
 modifica auth, Prisma schema/migraciones, ni otro dominio. No se hicieron push ni
 migraciones, y los únicos datos escritos fueron fixtures de la base PostgreSQL aislada.
 
-Riesgo residual: las carreras se disparan mediante solicitudes concurrentes reales y
-verifican el resultado canónico, pero no fuerzan una barrera SQL interna específica del
-módulo sync. El contrato queda cubierto a nivel HTTP/BD; una futura prueba de estrés
-puede ampliar cardinalidad y número de dispositivos sin cambiar esta garantía funcional.
+Riesgo residual: la barrera controla dos solicitudes y el lock del ciclo de vida, no una
+matriz de carga sostenida ni múltiples procesos de aplicación. El contrato queda cubierto
+a nivel HTTP/BD; una futura prueba de estrés puede ampliar cardinalidad y número de
+dispositivos sin cambiar esta garantía funcional.
