@@ -10,7 +10,7 @@ Este tramo ejecuta la hoja de ruta integral del usuario; no reemplaza su alcance
 - POST /api/v1/sync/workouts debe ser transaccional, idempotente y devolver revisión canónica; conflicto de revisión devuelve 409 con versión del servidor.
 - Si existe otra sesión activa, no se mezcla automáticamente.
 - No ejecutar migraciones destructivas ni reiniciar una base existente. Solo datos sintéticos en PostgreSQL aislado.
-- No hacer merge ni despliegue en este tramo. El push solo se realiza con autorización explícita del usuario. Pruebas reales sin sustituir Prisma, autenticación, transacciones o SQL por mocks.
+- No hacer merge ni despliegue en este tramo. El propietario autoriza checkpoints y pushes diarios a `codex/evry-optimization`; no autoriza merge a `main` ni despliegue. Render y Cloudflare quedan excluidos y cualquier despliegue futuro requerirá autorización explícita y se gestionará desde Vercel. Pruebas reales sin sustituir Prisma, autenticación, transacciones o SQL por mocks.
 
 ## Task 1: Autenticación real y configuración HTTP compartida
 
