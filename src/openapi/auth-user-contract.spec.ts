@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { PassportModule } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
 import type { INestApplication } from '@nestjs/common';
 import type { OpenAPIObject, SchemaObject } from '@nestjs/swagger';
 import { createOpenApiDocument } from './openapi-document';
@@ -8,6 +9,7 @@ import { MobileAuthController } from '../modules/auth/mobile-auth.controller';
 import { AuthService } from '../modules/auth/auth.service';
 import { UsersController } from '../modules/users/users.controller';
 import { UsersService } from '../modules/users/users.service';
+import { WebOriginGuard } from '../modules/auth/web-origin.guard';
 
 let app: INestApplication;
 let document: OpenAPIObject;
@@ -20,6 +22,8 @@ beforeAll(async () => {
     providers: [
       { provide: AuthService, useValue: {} },
       { provide: UsersService, useValue: {} },
+      { provide: WebOriginGuard, useValue: { canActivate: () => true } },
+      { provide: ConfigService, useValue: { getOrThrow: () => 'http://127.0.0.1:3000' } },
     ],
   }).compile();
   app = module.createNestApplication();
@@ -203,4 +207,9 @@ it('links authentication failures and duplicate registration to the normalized e
   expect(document.paths['/api/v1/auth/register'].post!.responses['409']).toMatchObject({
     content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
   });
+  for (const path of ['/api/v1/auth/register', '/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/logout']) {
+    expect(document.paths[path].post!.responses['403']).toMatchObject({
+      content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
+    });
+  }
 });

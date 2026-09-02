@@ -6,12 +6,13 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { MobileAuthController } from './mobile-auth.controller';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { WebOriginGuard } from './web-origin.guard';
 
 @Global()
 @Module({
   imports: [PassportModule.register({ defaultStrategy: 'jwt' }), JwtModule.register({})],
   controllers: [AuthController, MobileAuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, WebOriginGuard],
   exports: [AuthService, JwtAuthGuard, PassportModule],
 })
 export class AuthModule {}
