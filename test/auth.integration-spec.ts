@@ -1,7 +1,9 @@
-import type { INestApplication } from '@nestjs/common';
+import { UnauthorizedException, type INestApplication } from '@nestjs/common';
 import bcrypt from 'bcrypt';
 import { createHash, randomUUID } from 'node:crypto';
+import { Client } from 'pg';
 import request from 'supertest';
+import { AuthService } from '../src/modules/auth/auth.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { createIntegrationApp } from './helpers/create-integration-app';
 
@@ -9,6 +11,12 @@ type HttpResponse = {
   body: Record<string, unknown>;
   headers: Record<string, string | string[] | undefined>;
   status: number;
+};
+
+type DatabaseConnectionIdentity = {
+  database: string;
+  port: string;
+  pid: string;
 };
 
 const PASSWORD = 'valid-password';
@@ -40,6 +48,45 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function testDatabaseUrl(): string {
+  const url = process.env.TEST_DATABASE_URL?.trim();
+  if (!url) throw new Error('TEST_DATABASE_URL must be configured for this integration test.');
+  return url;
+}
+
+async function waitForRefreshWriteBarrier(
+  client: Client,
+  expectedWaiters: number,
+): Promise<void> {
+  const deadline = Date.now() + 5_000;
+
+  while (Date.now() < deadline) {
+    const result = await client.query<{ count: string }>(`
+      SELECT COUNT(*)::text AS count
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND wait_event_type = 'Lock'
+    `);
+    if (Number(result.rows[0]?.count) >= expectedWaiters) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  const activity = await client.query<{
+    pid: number;
+    state: string;
+    wait_event_type: string | null;
+    wait_event: string | null;
+    query: string;
+  }>(`
+    SELECT pid, state, wait_event_type, wait_event, query
+    FROM pg_stat_activity
+    WHERE datname = current_database()
+  `);
+  throw new Error(
+    `Timed out waiting for ${expectedWaiters} refresh writes at the database barrier: ${JSON.stringify(activity.rows)}`,
+  );
+}
+
 describe('authentication HTTP/PostgreSQL', () => {
   const prefix = `ai-${randomUUID().slice(0, 8)}`;
   const userIds: string[] = [];
@@ -56,6 +103,16 @@ describe('authentication HTTP/PostgreSQL', () => {
     });
     userIds.push(user.id);
     return user;
+  }
+
+  async function databaseConnectionIdentity(targetPrisma: PrismaService) {
+    const [identity] = await targetPrisma.$queryRaw<DatabaseConnectionIdentity[]>`
+      SELECT current_database() AS database,
+        inet_server_port()::text AS port,
+        pg_backend_pid()::text AS pid
+    `;
+    if (!identity) throw new Error('Expected PostgreSQL connection identity.');
+    return identity;
   }
 
   async function mobileLogin(
@@ -309,26 +366,68 @@ describe('authentication HTTP/PostgreSQL', () => {
     }
   });
 
-  it('never returns 500 for simultaneous refresh and invalidates the winning descendant', async () => {
+  it('handles a database-forced serializable refresh collision without a 500 or valid descendant', async () => {
     const user = await createUser('concurrent-refresh');
     const login = await mobileLogin(user.email);
     const originalToken = login.body.refreshToken as string;
+    const barrier = new Client({ connectionString: testDatabaseUrl() });
+    const observer = new Client({ connectionString: testDatabaseUrl() });
+    let refreshes: Promise<Awaited<ReturnType<AuthService['refresh']>>>[] = [];
+    let leftApp: INestApplication | undefined;
+    let rightApp: INestApplication | undefined;
+    await barrier.connect();
+    try {
+      await observer.connect();
+      leftApp = await createIntegrationApp();
+      rightApp = await createIntegrationApp();
+      await expect(Promise.all([
+        databaseConnectionIdentity(leftApp.get(PrismaService)),
+        databaseConnectionIdentity(rightApp.get(PrismaService)),
+      ])).resolves.toEqual([
+        expect.objectContaining({ database: 'evry_contract_test', port: '55437', pid: expect.any(String) }),
+        expect.objectContaining({ database: 'evry_contract_test', port: '55437', pid: expect.any(String) }),
+      ]);
 
-    const [left, right] = await Promise.all([
-      mobileRefresh(originalToken),
-      mobileRefresh(originalToken),
-    ]);
+      await barrier.query('BEGIN');
+      await barrier.query(
+        'SELECT id FROM "RefreshToken" WHERE "tokenHash" = $1 FOR UPDATE',
+        [sha256(originalToken)],
+      );
 
-    expect([left.status, right.status].sort()).toEqual([200, 401]);
-    const winner = left.status === 200 ? left : right;
-    const rejected = left.status === 401 ? left : right;
-    expect(rejected.body).toMatchObject({
-      code: 'UNAUTHORIZED',
-      retryable: false,
-      requestId: expect.any(String),
-    });
-    expect((await mobileRefresh(winner.body.refreshToken as string)).status).toBe(401);
-  });
+      const leftRefresh = leftApp.get(AuthService).refresh(originalToken, 'MOBILE');
+      refreshes = [leftRefresh];
+      await waitForRefreshWriteBarrier(observer, 1);
+      const rightRefresh = rightApp.get(AuthService).refresh(originalToken, 'MOBILE');
+      refreshes = [leftRefresh, rightRefresh];
+      await waitForRefreshWriteBarrier(observer, 2);
+      await barrier.query('COMMIT');
+
+      const results = await Promise.allSettled(refreshes);
+      const winner = results.find((result) => result.status === 'fulfilled');
+      const rejected = results.find((result) => result.status === 'rejected');
+      if (!winner || winner.status !== 'fulfilled' || !rejected || rejected.status !== 'rejected') {
+        throw new Error('Expected exactly one refresh winner and one rejected collision.');
+      }
+      expect(rejected.reason).toBeInstanceOf(UnauthorizedException);
+      expect((await mobileRefresh(winner.value.refreshToken)).status).toBe(401);
+
+      const httpLogin = await mobileLogin(user.email);
+      const httpToken = httpLogin.body.refreshToken as string;
+      const [left, right] = await Promise.all([
+        mobileRefresh(httpToken),
+        mobileRefresh(httpToken),
+      ]);
+      expect([left.status, right.status].sort()).toEqual([200, 401]);
+      expect([left.status, right.status]).not.toContain(500);
+    } finally {
+      await barrier.query('ROLLBACK').catch(() => undefined);
+      await Promise.allSettled(refreshes);
+      await leftApp?.close();
+      await rightApp?.close();
+      await observer.end();
+      await barrier.end();
+    }
+  }, 15_000);
 
   it('requires an exact configured Origin on every browser mutation and its legacy alias', async () => {
     const isolatedApp = await createIntegrationApp();

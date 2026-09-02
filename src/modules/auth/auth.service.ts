@@ -91,7 +91,9 @@ export class AuthService {
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
-      if (!(error instanceof ConcurrentRefreshError)) throw error;
+      const isSerializableCollision = error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === 'P2034';
+      if (!(error instanceof ConcurrentRefreshError) && !isSerializableCollision) throw error;
       await this.revokeFamily(record.familyId);
       throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
     }
