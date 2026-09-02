@@ -81,13 +81,14 @@ export class AuthController {
     type: LogoutResponseDto,
     headers: { 'Set-Cookie': { description: 'Clears the evry_refresh browser session cookie.', schema: { type: 'string' } } },
   })
+  @ApiUnauthorizedResponse({ description: 'A token from another platform is rejected.', schema: { $ref: '#/components/schemas/ApiError' } })
   @ApiForbiddenResponse(FORBIDDEN_ORIGIN_RESPONSE)
   @HttpCode(200)
   @UseGuards(WebOriginGuard)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = req.cookies?.[REFRESH_COOKIE];
-    if (token) await this.auth.logout(token);
     res.clearCookie(REFRESH_COOKIE, refreshCookieOptions());
+    if (token) await this.auth.logout(token, 'WEB');
     return { ok: true };
   }
 

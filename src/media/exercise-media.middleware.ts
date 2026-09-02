@@ -14,11 +14,11 @@ interface ExerciseMediaOptions {
 const MEDIA_NOT_FOUND = 'Medio no encontrado.';
 
 export function configuredCorsOrigins(rawOrigins: string | undefined = process.env.CORS_ORIGIN): string[] {
-  const configured = (rawOrigins?.trim() ? rawOrigins : 'http://localhost:3000')
+  const configured = (rawOrigins ?? '')
     .split(',')
     .map((origin) => origin.trim().replace(/\/+$/, ''))
     .filter(Boolean);
-  return [...new Set([...configured, 'http://127.0.0.1:3000'])];
+  return [...new Set(configured)];
 }
 
 function isWithin(root: string, candidate: string): boolean {

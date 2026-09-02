@@ -97,13 +97,21 @@ export class AuthService {
     }
   }
 
-  async logout(refreshToken: string) {
+  async logout(
+    refreshToken: string,
+    platform: RefreshTokenPlatform = 'WEB',
+  ) {
     const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
     const record = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
-      select: { familyId: true },
+      select: { familyId: true, platform: true },
     });
-    if (record) await this.revokeFamily(record.familyId);
+    if (record) {
+      await this.revokeFamily(record.familyId);
+      if (record.platform !== platform) {
+        throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
+      }
+    }
     return { ok: true };
   }
 

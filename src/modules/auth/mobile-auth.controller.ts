@@ -37,8 +37,9 @@ export class MobileAuthController {
   @ApiOperation({ operationId: 'mobileLogout', security: [] })
   @ApiBody({ type: RefreshTokenDto })
   @ApiOkResponse({ type: LogoutResponseDto })
+  @ApiUnauthorizedResponse({ description: 'A token from another platform is rejected.', schema: { $ref: '#/components/schemas/ApiError' } })
   @HttpCode(200)
   logout(@Body() dto: RefreshTokenDto) {
-    return this.auth.logout(dto.refreshToken);
+    return this.auth.logout(dto.refreshToken, 'MOBILE');
   }
 }
