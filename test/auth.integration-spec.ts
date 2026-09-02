@@ -1,9 +1,8 @@
-import { UnauthorizedException, type INestApplication } from '@nestjs/common';
+import type { INestApplication } from '@nestjs/common';
 import bcrypt from 'bcrypt';
 import { createHash, randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import request from 'supertest';
-import { AuthService } from '../src/modules/auth/auth.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { createIntegrationApp } from './helpers/create-integration-app';
 
@@ -52,6 +51,14 @@ function testDatabaseUrl(): string {
   const url = process.env.TEST_DATABASE_URL?.trim();
   if (!url) throw new Error('TEST_DATABASE_URL must be configured for this integration test.');
   return url;
+}
+
+function expectedTestDatabaseIdentity() {
+  const parsed = new URL(testDatabaseUrl());
+  return {
+    database: decodeURIComponent(parsed.pathname).replace(/^\/+|\/+$/g, ''),
+    port: parsed.port || '5432',
+  };
 }
 
 async function waitForRefreshWriteBarrier(
@@ -131,6 +138,24 @@ describe('authentication HTTP/PostgreSQL', () => {
     return request(targetApp.getHttpServer())
       .post('/api/v1/auth/mobile/refresh')
       .send({ refreshToken });
+  }
+
+  async function networkMobileRefresh(
+    refreshToken: string,
+    targetApp: INestApplication,
+  ): Promise<HttpResponse> {
+    const address = targetApp.getHttpServer().address();
+    if (!address || typeof address === 'string') throw new Error('Expected an HTTP listener address.');
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/v1/auth/mobile/refresh`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    return {
+      body: await response.json() as Record<string, unknown>,
+      headers: {},
+      status: response.status,
+    };
   }
 
   beforeAll(async () => {
@@ -372,7 +397,7 @@ describe('authentication HTTP/PostgreSQL', () => {
     const originalToken = login.body.refreshToken as string;
     const barrier = new Client({ connectionString: testDatabaseUrl() });
     const observer = new Client({ connectionString: testDatabaseUrl() });
-    let refreshes: Promise<Awaited<ReturnType<AuthService['refresh']>>>[] = [];
+    let refreshes: Promise<HttpResponse>[] = [];
     let leftApp: INestApplication | undefined;
     let rightApp: INestApplication | undefined;
     await barrier.connect();
@@ -380,13 +405,16 @@ describe('authentication HTTP/PostgreSQL', () => {
       await observer.connect();
       leftApp = await createIntegrationApp();
       rightApp = await createIntegrationApp();
-      await expect(Promise.all([
+      const [leftConnection, rightConnection] = await Promise.all([
         databaseConnectionIdentity(leftApp.get(PrismaService)),
         databaseConnectionIdentity(rightApp.get(PrismaService)),
-      ])).resolves.toEqual([
-        expect.objectContaining({ database: 'evry_contract_test', port: '55437', pid: expect.any(String) }),
-        expect.objectContaining({ database: 'evry_contract_test', port: '55437', pid: expect.any(String) }),
       ]);
+      const expectedConnection = expectedTestDatabaseIdentity();
+      expect(leftConnection).toEqual(expect.objectContaining({ ...expectedConnection, pid: expect.any(String) }));
+      expect(rightConnection).toEqual(expect.objectContaining({ ...expectedConnection, pid: expect.any(String) }));
+      expect(leftConnection.pid).not.toBe(rightConnection.pid);
+      await leftApp.listen(0, '127.0.0.1');
+      await rightApp.listen(0, '127.0.0.1');
 
       await barrier.query('BEGIN');
       await barrier.query(
@@ -394,31 +422,26 @@ describe('authentication HTTP/PostgreSQL', () => {
         [sha256(originalToken)],
       );
 
-      const leftRefresh = leftApp.get(AuthService).refresh(originalToken, 'MOBILE');
+      const leftRefresh = networkMobileRefresh(originalToken, leftApp);
       refreshes = [leftRefresh];
       await waitForRefreshWriteBarrier(observer, 1);
-      const rightRefresh = rightApp.get(AuthService).refresh(originalToken, 'MOBILE');
+      const rightRefresh = networkMobileRefresh(originalToken, rightApp);
       refreshes = [leftRefresh, rightRefresh];
       await waitForRefreshWriteBarrier(observer, 2);
       await barrier.query('COMMIT');
 
-      const results = await Promise.allSettled(refreshes);
-      const winner = results.find((result) => result.status === 'fulfilled');
-      const rejected = results.find((result) => result.status === 'rejected');
-      if (!winner || winner.status !== 'fulfilled' || !rejected || rejected.status !== 'rejected') {
-        throw new Error('Expected exactly one refresh winner and one rejected collision.');
-      }
-      expect(rejected.reason).toBeInstanceOf(UnauthorizedException);
-      expect((await mobileRefresh(winner.value.refreshToken)).status).toBe(401);
-
-      const httpLogin = await mobileLogin(user.email);
-      const httpToken = httpLogin.body.refreshToken as string;
-      const [left, right] = await Promise.all([
-        mobileRefresh(httpToken),
-        mobileRefresh(httpToken),
-      ]);
+      const [left, right] = await Promise.all(refreshes);
       expect([left.status, right.status].sort()).toEqual([200, 401]);
       expect([left.status, right.status]).not.toContain(500);
+      const winner = left.status === 200 ? left : right;
+      const rejected = left.status === 401 ? left : right;
+      expect(rejected.body).toEqual({
+        code: 'UNAUTHORIZED',
+        message: 'El token de sesión no es válido o ya expiró.',
+        retryable: false,
+        requestId: expect.any(String),
+      });
+      expect((await mobileRefresh(winner.body.refreshToken as string)).status).toBe(401);
     } finally {
       await barrier.query('ROLLBACK').catch(() => undefined);
       await Promise.allSettled(refreshes);
