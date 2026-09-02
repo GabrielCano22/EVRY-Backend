@@ -33,6 +33,12 @@ type SyncPayload = {
   sets: SyncSet[];
   deletedSetClientIds: string[];
 };
+type AdvisoryLockIdentity = {
+  pid: string;
+  classId: string;
+  objectId: string;
+  objectSubId: string;
+};
 
 function testDatabaseUrl(): string {
   const url = process.env.TEST_DATABASE_URL?.trim();
@@ -40,42 +46,80 @@ function testDatabaseUrl(): string {
   return url;
 }
 
-async function lockWorkoutLifecycleBarrier(client: Client, userId: string): Promise<void> {
+async function lockWorkoutLifecycleBarrier(
+  client: Client,
+  userId: string,
+): Promise<AdvisoryLockIdentity> {
   await client.query('BEGIN');
   await client.query(
     'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
     [`evry:workout-lifecycle:${userId}`],
   );
+  const locks = await client.query<AdvisoryLockIdentity>(`
+    SELECT l.pid::text AS pid,
+      l.classid::text AS "classId",
+      l.objid::text AS "objectId",
+      l.objsubid::text AS "objectSubId"
+    FROM pg_locks AS l
+    WHERE l.pid = pg_backend_pid()
+      AND l.locktype = 'advisory'
+      AND l.granted
+  `);
+  if (locks.rows.length !== 1) {
+    throw new Error(`Expected one granted lifecycle advisory lock, got ${JSON.stringify(locks.rows)}.`);
+  }
+  return locks.rows[0];
 }
 
-async function waitForSyncLockWaiters(client: Client, expectedWaiters: number): Promise<void> {
+async function waitForSyncLockWaiters(
+  client: Client,
+  lock: AdvisoryLockIdentity,
+  expectedWaiters: number,
+): Promise<void> {
   const deadline = Date.now() + 5_000;
 
   while (Date.now() < deadline) {
-    const result = await client.query<{ count: string }>(`
-      SELECT COUNT(*)::text AS count
-      FROM pg_stat_activity
-      WHERE datname = current_database()
-        AND wait_event_type = 'Lock'
-        AND query LIKE '%pg_advisory_xact_lock%'
-    `);
-    if (Number(result.rows[0]?.count) >= expectedWaiters) return;
+    const result = await client.query<{ pid: string }>(`
+      SELECT l.pid::text AS pid
+      FROM pg_locks AS l
+      WHERE l.locktype = 'advisory'
+        AND NOT l.granted
+        AND l.classid::text = $1
+        AND l.objid::text = $2
+        AND l.objsubid::text = $3
+      ORDER BY l.pid
+    `, [lock.classId, lock.objectId, lock.objectSubId]);
+    const waiterPids = result.rows.map(({ pid }) => pid);
+    if (
+      waiterPids.length === expectedWaiters
+      && new Set(waiterPids).size === expectedWaiters
+      && waiterPids.every((pid) => pid !== lock.pid)
+    ) return;
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
 
-  const activity = await client.query<{
-    pid: number;
-    state: string;
-    wait_event_type: string | null;
-    wait_event: string | null;
-    query: string;
+  const matchingLocks = await client.query<{
+    pid: string;
+    granted: boolean;
+    mode: string;
+    waitEventType: string | null;
+    waitEvent: string | null;
   }>(`
-    SELECT pid, state, wait_event_type, wait_event, query
-    FROM pg_stat_activity
-    WHERE datname = current_database()
-  `);
+    SELECT l.pid::text AS pid,
+      l.granted,
+      l.mode,
+      a.wait_event_type AS "waitEventType",
+      a.wait_event AS "waitEvent"
+    FROM pg_locks AS l
+    JOIN pg_stat_activity AS a ON a.pid = l.pid
+    WHERE l.locktype = 'advisory'
+      AND l.classid::text = $1
+      AND l.objid::text = $2
+      AND l.objsubid::text = $3
+    ORDER BY l.granted DESC, l.pid
+  `, [lock.classId, lock.objectId, lock.objectSubId]);
   throw new Error(
-    `Timed out waiting for ${expectedWaiters} sync transactions at the lifecycle lock: ${JSON.stringify(activity.rows)}`,
+    `Timed out waiting for exactly ${expectedWaiters} sync transactions at lifecycle lock ${JSON.stringify(lock)}: ${JSON.stringify(matchingLocks.rows)}`,
   );
 }
 
@@ -262,13 +306,13 @@ describe('offline workout synchronization HTTP/PostgreSQL', () => {
     await barrier.connect();
     try {
       await observer.connect();
-      await lockWorkoutLifecycleBarrier(barrier, user.id);
+      const lock = await lockWorkoutLifecycleBarrier(barrier, user.id);
       const left = startSync(user, payload);
       deliveries = [left];
-      await waitForSyncLockWaiters(observer, 1);
+      await waitForSyncLockWaiters(observer, lock, 1);
       const right = startSync(user, payload);
       deliveries = [left, right];
-      await waitForSyncLockWaiters(observer, 2);
+      await waitForSyncLockWaiters(observer, lock, 2);
       await barrier.query('COMMIT');
 
       const [leftResponse, rightResponse] = await Promise.all(deliveries);
@@ -311,13 +355,13 @@ describe('offline workout synchronization HTTP/PostgreSQL', () => {
     await barrier.connect();
     try {
       await observer.connect();
-      await lockWorkoutLifecycleBarrier(barrier, user.id);
+      const lock = await lockWorkoutLifecycleBarrier(barrier, user.id);
       const left = startSync(user, payload);
       deliveries = [left];
-      await waitForSyncLockWaiters(observer, 1);
+      await waitForSyncLockWaiters(observer, lock, 1);
       const right = startSync(user, rival);
       deliveries = [left, right];
-      await waitForSyncLockWaiters(observer, 2);
+      await waitForSyncLockWaiters(observer, lock, 2);
       await barrier.query('COMMIT');
 
       const [leftResponse, rightResponse] = await Promise.all(deliveries);

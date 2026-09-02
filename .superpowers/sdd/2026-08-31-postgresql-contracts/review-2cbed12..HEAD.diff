@@ -1,9 +1,9 @@
 diff --git a/.superpowers/sdd/2026-08-31-postgresql-contracts/task-2-report.md b/.superpowers/sdd/2026-08-31-postgresql-contracts/task-2-report.md
 new file mode 100644
-index 0000000..e1436ca
+index 0000000..410900b
 --- /dev/null
 +++ b/.superpowers/sdd/2026-08-31-postgresql-contracts/task-2-report.md
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,105 @@
 +# Task 2 — Sincronización PostgreSQL real y rollback
 +
 +Base revisada: `2cbed123e03ea97009e5660fbcac267a5186a3e4` en `codex/evry-optimization`.
@@ -51,6 +51,15 @@ index 0000000..e1436ca
 +de producción. Los casos de ejercicio ajeno y sesión terminal también validan el error
 +uniforme (`code`, `retryable: false` y `requestId`) además de HTTP y filas.
 +
++### Corrección de revisión 2
++
++La espera ya no cuenta actividad advisory global ni usa el texto de la consulta como
++señal. El cliente que retiene la barrera lee la identidad exacta de su lock concedido
++(`classid`, `objid`, `objsubid` y PID); el observador cuenta en `pg_locks` solo locks no
++concedidos de esa identidad, exige igualdad exacta con el número esperado y verifica que
++los PIDs waiters sean únicos y distintos del dueño. Si expira, el diagnóstico enumera
++solamente los locks de esa identidad. La variante pasó focal sin cambio productivo.
++
 +## Comandos y resultados
 +
 +Las integraciones se ejecutaron con:
@@ -71,6 +80,9 @@ index 0000000..e1436ca
 +
 +Tras la corrección de revisión 1, el mismo comando focal volvió a aprobar 1 suite y 10
 +pruebas con las dos barreras PostgreSQL activas.
++
++Tras la corrección de revisión 2, volvió a aprobar 1 suite y 10 pruebas con los waiters
++identificados por la identidad exacta del advisory lock.
 +
 +Verificación de cierre:
 +
@@ -99,10 +111,10 @@ index 0000000..e1436ca
 +dispositivos sin cambiar esta garantía funcional.
 diff --git a/test/sync.integration-spec.ts b/test/sync.integration-spec.ts
 new file mode 100644
-index 0000000..c07ed07
+index 0000000..b605889
 --- /dev/null
 +++ b/test/sync.integration-spec.ts
-@@ -0,0 +1,534 @@
+@@ -0,0 +1,578 @@
 +import type { INestApplication } from '@nestjs/common';
 +import { JwtService } from '@nestjs/jwt';
 +import { Equipment, MuscleGroup, WorkoutStatus } from '@prisma/client';
@@ -138,6 +150,12 @@ index 0000000..c07ed07
 +  sets: SyncSet[];
 +  deletedSetClientIds: string[];
 +};
++type AdvisoryLockIdentity = {
++  pid: string;
++  classId: string;
++  objectId: string;
++  objectSubId: string;
++};
 +
 +function testDatabaseUrl(): string {
 +  const url = process.env.TEST_DATABASE_URL?.trim();
@@ -145,42 +163,80 @@ index 0000000..c07ed07
 +  return url;
 +}
 +
-+async function lockWorkoutLifecycleBarrier(client: Client, userId: string): Promise<void> {
++async function lockWorkoutLifecycleBarrier(
++  client: Client,
++  userId: string,
++): Promise<AdvisoryLockIdentity> {
 +  await client.query('BEGIN');
 +  await client.query(
 +    'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
 +    [`evry:workout-lifecycle:${userId}`],
 +  );
++  const locks = await client.query<AdvisoryLockIdentity>(`
++    SELECT l.pid::text AS pid,
++      l.classid::text AS "classId",
++      l.objid::text AS "objectId",
++      l.objsubid::text AS "objectSubId"
++    FROM pg_locks AS l
++    WHERE l.pid = pg_backend_pid()
++      AND l.locktype = 'advisory'
++      AND l.granted
++  `);
++  if (locks.rows.length !== 1) {
++    throw new Error(`Expected one granted lifecycle advisory lock, got ${JSON.stringify(locks.rows)}.`);
++  }
++  return locks.rows[0];
 +}
 +
-+async function waitForSyncLockWaiters(client: Client, expectedWaiters: number): Promise<void> {
++async function waitForSyncLockWaiters(
++  client: Client,
++  lock: AdvisoryLockIdentity,
++  expectedWaiters: number,
++): Promise<void> {
 +  const deadline = Date.now() + 5_000;
 +
 +  while (Date.now() < deadline) {
-+    const result = await client.query<{ count: string }>(`
-+      SELECT COUNT(*)::text AS count
-+      FROM pg_stat_activity
-+      WHERE datname = current_database()
-+        AND wait_event_type = 'Lock'
-+        AND query LIKE '%pg_advisory_xact_lock%'
-+    `);
-+    if (Number(result.rows[0]?.count) >= expectedWaiters) return;
++    const result = await client.query<{ pid: string }>(`
++      SELECT l.pid::text AS pid
++      FROM pg_locks AS l
++      WHERE l.locktype = 'advisory'
++        AND NOT l.granted
++        AND l.classid::text = $1
++        AND l.objid::text = $2
++        AND l.objsubid::text = $3
++      ORDER BY l.pid
++    `, [lock.classId, lock.objectId, lock.objectSubId]);
++    const waiterPids = result.rows.map(({ pid }) => pid);
++    if (
++      waiterPids.length === expectedWaiters
++      && new Set(waiterPids).size === expectedWaiters
++      && waiterPids.every((pid) => pid !== lock.pid)
++    ) return;
 +    await new Promise<void>((resolve) => setImmediate(resolve));
 +  }
 +
-+  const activity = await client.query<{
-+    pid: number;
-+    state: string;
-+    wait_event_type: string | null;
-+    wait_event: string | null;
-+    query: string;
++  const matchingLocks = await client.query<{
++    pid: string;
++    granted: boolean;
++    mode: string;
++    waitEventType: string | null;
++    waitEvent: string | null;
 +  }>(`
-+    SELECT pid, state, wait_event_type, wait_event, query
-+    FROM pg_stat_activity
-+    WHERE datname = current_database()
-+  `);
++    SELECT l.pid::text AS pid,
++      l.granted,
++      l.mode,
++      a.wait_event_type AS "waitEventType",
++      a.wait_event AS "waitEvent"
++    FROM pg_locks AS l
++    JOIN pg_stat_activity AS a ON a.pid = l.pid
++    WHERE l.locktype = 'advisory'
++      AND l.classid::text = $1
++      AND l.objid::text = $2
++      AND l.objsubid::text = $3
++    ORDER BY l.granted DESC, l.pid
++  `, [lock.classId, lock.objectId, lock.objectSubId]);
 +  throw new Error(
-+    `Timed out waiting for ${expectedWaiters} sync transactions at the lifecycle lock: ${JSON.stringify(activity.rows)}`,
++    `Timed out waiting for exactly ${expectedWaiters} sync transactions at lifecycle lock ${JSON.stringify(lock)}: ${JSON.stringify(matchingLocks.rows)}`,
 +  );
 +}
 +
@@ -367,13 +423,13 @@ index 0000000..c07ed07
 +    await barrier.connect();
 +    try {
 +      await observer.connect();
-+      await lockWorkoutLifecycleBarrier(barrier, user.id);
++      const lock = await lockWorkoutLifecycleBarrier(barrier, user.id);
 +      const left = startSync(user, payload);
 +      deliveries = [left];
-+      await waitForSyncLockWaiters(observer, 1);
++      await waitForSyncLockWaiters(observer, lock, 1);
 +      const right = startSync(user, payload);
 +      deliveries = [left, right];
-+      await waitForSyncLockWaiters(observer, 2);
++      await waitForSyncLockWaiters(observer, lock, 2);
 +      await barrier.query('COMMIT');
 +
 +      const [leftResponse, rightResponse] = await Promise.all(deliveries);
@@ -416,13 +472,13 @@ index 0000000..c07ed07
 +    await barrier.connect();
 +    try {
 +      await observer.connect();
-+      await lockWorkoutLifecycleBarrier(barrier, user.id);
++      const lock = await lockWorkoutLifecycleBarrier(barrier, user.id);
 +      const left = startSync(user, payload);
 +      deliveries = [left];
-+      await waitForSyncLockWaiters(observer, 1);
++      await waitForSyncLockWaiters(observer, lock, 1);
 +      const right = startSync(user, rival);
 +      deliveries = [left, right];
-+      await waitForSyncLockWaiters(observer, 2);
++      await waitForSyncLockWaiters(observer, lock, 2);
 +      await barrier.query('COMMIT');
 +
 +      const [leftResponse, rightResponse] = await Promise.all(deliveries);

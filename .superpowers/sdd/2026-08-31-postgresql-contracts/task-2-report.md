@@ -45,6 +45,15 @@ antes de observar los waiters. La barrera real quedó GREEN sin `P2034`, `500` n
 de producción. Los casos de ejercicio ajeno y sesión terminal también validan el error
 uniforme (`code`, `retryable: false` y `requestId`) además de HTTP y filas.
 
+### Corrección de revisión 2
+
+La espera ya no cuenta actividad advisory global ni usa el texto de la consulta como
+señal. El cliente que retiene la barrera lee la identidad exacta de su lock concedido
+(`classid`, `objid`, `objsubid` y PID); el observador cuenta en `pg_locks` solo locks no
+concedidos de esa identidad, exige igualdad exacta con el número esperado y verifica que
+los PIDs waiters sean únicos y distintos del dueño. Si expira, el diagnóstico enumera
+solamente los locks de esa identidad. La variante pasó focal sin cambio productivo.
+
 ## Comandos y resultados
 
 Las integraciones se ejecutaron con:
@@ -65,6 +74,9 @@ Resultado focal: 1 suite, 10 pruebas aprobadas.
 
 Tras la corrección de revisión 1, el mismo comando focal volvió a aprobar 1 suite y 10
 pruebas con las dos barreras PostgreSQL activas.
+
+Tras la corrección de revisión 2, volvió a aprobar 1 suite y 10 pruebas con los waiters
+identificados por la identidad exacta del advisory lock.
 
 Verificación de cierre:
 
