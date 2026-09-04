@@ -35,6 +35,7 @@ type SyncPayload = {
 };
 type AdvisoryLockIdentity = {
   pid: string;
+  databaseId: string;
   classId: string;
   objectId: string;
   objectSubId: string;
@@ -57,6 +58,7 @@ async function lockWorkoutLifecycleBarrier(
   );
   const locks = await client.query<AdvisoryLockIdentity>(`
     SELECT l.pid::text AS pid,
+      l.database::text AS "databaseId",
       l.classid::text AS "classId",
       l.objid::text AS "objectId",
       l.objsubid::text AS "objectSubId"
@@ -84,11 +86,12 @@ async function waitForSyncLockWaiters(
       FROM pg_locks AS l
       WHERE l.locktype = 'advisory'
         AND NOT l.granted
-        AND l.classid::text = $1
-        AND l.objid::text = $2
-        AND l.objsubid::text = $3
+        AND l.database::text = $1
+        AND l.classid::text = $2
+        AND l.objid::text = $3
+        AND l.objsubid::text = $4
       ORDER BY l.pid
-    `, [lock.classId, lock.objectId, lock.objectSubId]);
+    `, [lock.databaseId, lock.classId, lock.objectId, lock.objectSubId]);
     const waiterPids = result.rows.map(({ pid }) => pid);
     if (
       waiterPids.length === expectedWaiters
@@ -113,11 +116,12 @@ async function waitForSyncLockWaiters(
     FROM pg_locks AS l
     JOIN pg_stat_activity AS a ON a.pid = l.pid
     WHERE l.locktype = 'advisory'
-      AND l.classid::text = $1
-      AND l.objid::text = $2
-      AND l.objsubid::text = $3
+      AND l.database::text = $1
+      AND l.classid::text = $2
+      AND l.objid::text = $3
+      AND l.objsubid::text = $4
     ORDER BY l.granted DESC, l.pid
-  `, [lock.classId, lock.objectId, lock.objectSubId]);
+  `, [lock.databaseId, lock.classId, lock.objectId, lock.objectSubId]);
   throw new Error(
     `Timed out waiting for exactly ${expectedWaiters} sync transactions at lifecycle lock ${JSON.stringify(lock)}: ${JSON.stringify(matchingLocks.rows)}`,
   );

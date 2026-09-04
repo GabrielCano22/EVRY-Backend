@@ -103,3 +103,62 @@ Riesgo residual: la barrera controla dos solicitudes y el lock del ciclo de vida
 matriz de carga sostenida ni múltiples procesos de aplicación. El contrato queda cubierto
 a nivel HTTP/BD; una futura prueba de estrés puede ampliar cardinalidad y número de
 dispositivos sin cambiar esta garantía funcional.
+
+### Corrección de revisión 3
+
+La identidad capturada del advisory lock ahora incluye también el OID de base de
+datos (`pg_locks.database`), junto con clase, objeto, sub-objeto y PID. Las consultas
+de espera y diagnóstico exigen igualdad de los cuatro componentes de identidad,
+evitando contar waiters no concedidos de otra base del mismo clúster. Se conservaron
+el conteo exacto de waiters, los PIDs distintos y la exclusión del PID dueño.
+
+## Comandos y resultados de la corrección 3
+
+Prueba focal ejecutada contra PostgreSQL sintético (la URL runtime es distinta y
+bloqueada, sin resets ni migraciones):
+
+```powershell
+$env:TEST_DATABASE_URL='postgresql://evry_test_admin@127.0.0.1:55437/evry_contract_test'
+$env:DATABASE_URL='postgresql://blocked@127.0.0.1:1/evry_runtime'
+$env:NODE_ENV='test'
+$env:JWT_ACCESS_SECRET='evry-test-access-secret-with-at-least-32-characters'
+$env:JWT_REFRESH_SECRET='evry-test-refresh-secret-with-at-least-32-characters-different'
+$env:CORS_ORIGIN='http://localhost:3000'
+$env:PORT='4000'
+$env:SWAGGER_ENABLED='false'
+npm run test:integration -- --runInBand test/sync.integration-spec.ts
+```
+
+Salida exacta relevante:
+
+```text
+Test Suites: 1 passed, 1 total
+Tests:       10 passed, 10 total
+Snapshots:   0 total
+Time:        80.221 s
+Ran all test suites matching test/sync.integration-spec.ts.
+```
+
+Verificación de tipos:
+
+```powershell
+npm run test:type-check
+```
+
+Salida exacta:
+
+```text
+> evry-backend@0.1.0 test:type-check
+> tsc --noEmit -p tsconfig.spec.json
+```
+
+El proceso terminó con código 0.
+
+## Auto-revisión de la corrección 3
+
+- El diff queda limitado a `test/sync.integration-spec.ts` y este reporte.
+- No hay cambios de producción, autenticación, esquema Prisma, migraciones,
+  infraestructura, resets ni push.
+- El OID de base se captura del lock concedido y se aplica en las consultas de
+  waiters y diagnóstico; se mantienen las aserciones de cardinalidad y PID.
+- No quedan preocupaciones conocidas dentro del alcance de esta revisión.
