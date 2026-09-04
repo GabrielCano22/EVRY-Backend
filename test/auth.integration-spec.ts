@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import { jest as jestGlobals } from '@jest/globals';
 import bcrypt from 'bcrypt';
 import { createHash, randomUUID } from 'node:crypto';
 import { Client } from 'pg';
@@ -510,13 +511,52 @@ describe('authentication HTTP/PostgreSQL', () => {
   });
 
   it('does not add localhost aliases that were not listed in CORS_ORIGIN', async () => {
-    const response = await request(app.getHttpServer())
-      .options('/api/v1/auth/login')
-      .set('Origin', 'http://127.0.0.1:3000')
-      .set('Access-Control-Request-Method', 'POST');
+    const originalCorsOrigin = process.env.CORS_ORIGIN;
+    const fixtures = [
+      {
+        configuredOrigin: 'http://localhost:3000',
+        allowedOrigin: 'http://localhost:3000',
+        deniedOrigin: 'http://127.0.0.1:3000',
+      },
+      {
+        configuredOrigin: 'http://127.0.0.1:3000',
+        allowedOrigin: 'http://127.0.0.1:3000',
+        deniedOrigin: 'http://localhost:3000',
+      },
+    ] as const;
 
-    expect(response.headers['access-control-allow-origin']).toBeUndefined();
-  });
+    try {
+      for (const fixture of fixtures) {
+        process.env.CORS_ORIGIN = fixture.configuredOrigin;
+        let isolatedApp: INestApplication | undefined;
+        try {
+          jestGlobals.resetModules();
+          const { createIntegrationApp: createCorsIntegrationApp } = await import('./helpers/create-integration-app');
+          isolatedApp = await createCorsIntegrationApp();
+          const server = isolatedApp.getHttpServer();
+          const allowed = await request(server)
+            .options('/api/v1/auth/login')
+            .set('Origin', fixture.allowedOrigin)
+            .set('Access-Control-Request-Method', 'POST');
+          expect(allowed.headers['access-control-allow-origin']).toBe(fixture.allowedOrigin);
+
+          const denied = await request(server)
+            .options('/api/v1/auth/login')
+            .set('Origin', fixture.deniedOrigin)
+            .set('Access-Control-Request-Method', 'POST');
+          expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+        } finally {
+          await isolatedApp?.close();
+        }
+      }
+    } finally {
+      if (originalCorsOrigin === undefined) {
+        delete process.env.CORS_ORIGIN;
+      } else {
+        process.env.CORS_ORIGIN = originalCorsOrigin;
+      }
+    }
+  }, 30_000);
 
   it('enforces real register, login and refresh limits with uniform retryable errors', async () => {
     const isolatedApp = await createIntegrationApp();
