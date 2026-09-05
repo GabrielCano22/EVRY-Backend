@@ -140,6 +140,8 @@ export class ProgressService {
         name: row.name,
         endedAt: row.endedAt.toISOString(),
         volumeKg: row.volumeKg,
+        setCount: row.setCount,
+        cyclePhase: row.cyclePhase,
       });
       days.set(row.date, day);
     }

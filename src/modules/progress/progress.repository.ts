@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { MuscleGroup, Prisma } from '@prisma/client';
+import { CyclePhase, MuscleGroup, Prisma } from '@prisma/client';
 import { APP_TIME_ZONE, type CivilDate } from '../../common/dates/civil-date';
 import { roundMetric } from './metrics';
 import { encodeHistoryCursor, type HistoryPosition } from './history-cursor';
@@ -57,6 +57,8 @@ export interface ActivityRepositoryRow {
   name: string;
   endedAt: Date;
   volumeKg: number;
+  setCount: number;
+  cyclePhase: CyclePhase | null;
 }
 
 type MetricRow = {
@@ -128,6 +130,8 @@ type ActivityRow = {
   name: string;
   endedAt: Date;
   volumeKg: number;
+  setCount: bigint;
+  cyclePhase: CyclePhase | null;
 };
 
 function rangeSql(fromInclusive: Date | null, toExclusive: Date): Prisma.Sql {
@@ -622,6 +626,8 @@ export class ProgressRepository {
         w."id" AS "id",
         w."name" AS "name",
         w."endedAt" AS "endedAt",
+        w."cyclePhase" AS "cyclePhase",
+        (SELECT COUNT(*) FROM "WorkoutSet" ws_count WHERE ws_count."workoutId" = w."id") AS "setCount",
         COALESCE(SUM(
           CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0 THEN ws."weightKg" * ws."reps" ELSE 0 END
         ), 0)::double precision AS "volumeKg"
@@ -635,7 +641,7 @@ export class ProgressRepository {
         AND w."cancelledAt" IS NULL
         AND w."endedAt" >= ${window.fromInclusive}
         AND w."endedAt" < ${window.toExclusive}
-      GROUP BY w."id", w."name", w."endedAt"
+      GROUP BY w."id", w."name", w."endedAt", w."cyclePhase"
       ORDER BY "date" ASC, w."endedAt" ASC, w."id" ASC
     `);
     return rows.map((row) => ({
@@ -644,6 +650,8 @@ export class ProgressRepository {
       name: row.name,
       endedAt: row.endedAt,
       volumeKg: roundMetric(row.volumeKg),
+      setCount: Number(row.setCount),
+      cyclePhase: row.cyclePhase,
     }));
   }
 }

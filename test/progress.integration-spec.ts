@@ -494,4 +494,28 @@ describe('progress HTTP/PostgreSQL', () => {
     expect(formatCivilDate(new Date('2026-01-15T04:59:00.000Z'))).toBe('2026-01-14');
     expect(formatCivilDate(new Date('2026-01-15T05:01:00.000Z'))).toBe('2026-01-15');
   });
+
+  it('returns bounded scalar calendar metadata despite more than 200 historical workouts', async () => {
+    const actor = await createUser('calendar-density');
+    await prisma.workout.createMany({ data: Array.from({ length: 205 }, (_, index) => ({
+      userId: actor.id, name: `${prefix}-history-${index}`, status: 'COMPLETED' as const,
+      startedAt: new Date('2025-06-01T10:00:00Z'), endedAt: new Date('2025-06-01T11:00:00Z'),
+    })) });
+    const visible = await createWorkout(actor, 'visible', new Date('2026-01-15T04:59:00Z'), [
+      { exercise: globalExercise, values: { weightKg: 100, reps: 20, isWarmup: true } },
+      { exercise: globalExercise, values: { weightKg: 40, reps: 10 } },
+    ]);
+    await prisma.workout.update({ where: { id: visible }, data: { cyclePhase: 'LUTEAL' } });
+    await createWorkout(actor, 'next-day', new Date('2026-01-15T05:01:00Z'), []);
+    await createWorkout(actor, 'cancelled-visible', new Date('2026-01-15T06:00:00Z'), [], new Date('2026-01-15T06:01:00Z'));
+    await createWorkout(actor, 'active-visible', null, []);
+    const calendar = await get('/api/progress/activity?from=2026-01-01&to=2026-01-31', actor);
+    expect(calendar.status).toBe(200);
+    expect(calendar.body.days.map((day: { date: string }) => day.date)).toEqual(['2026-01-14', '2026-01-15']);
+    expect(calendar.body.days[0].sessions).toHaveLength(1);
+    expect(calendar.body.days[0].sessions[0]).toMatchObject({ id: visible, setCount: 2, volumeKg: 400, cyclePhase: 'LUTEAL' });
+    expect(calendar.body.days[0].sessions[0]).not.toHaveProperty('sets');
+    expect(calendar.body.days[1].sessions).toHaveLength(1);
+    expect(calendar.body.days[1].sessions[0]).toMatchObject({ setCount: 0, volumeKg: 0, cyclePhase: null });
+  });
 });

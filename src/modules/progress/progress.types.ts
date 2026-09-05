@@ -1,4 +1,4 @@
-import type { MuscleGroup } from '@prisma/client';
+import type { CyclePhase, MuscleGroup } from '@prisma/client';
 import type { CivilDate } from '../../common/dates/civil-date';
 
 export type ProgressPeriod = '30d' | '90d' | '6m' | '1y' | 'all';
@@ -172,6 +172,6 @@ export interface ProgressActivityResponse {
   to: CivilDate;
   days: Array<{
     date: CivilDate;
-    sessions: Array<{ id: string; name: string; endedAt: string; volumeKg: number }>;
+    sessions: Array<{ id: string; name: string; endedAt: string; volumeKg: number; setCount: number; cyclePhase: CyclePhase | null }>;
   }>;
 }

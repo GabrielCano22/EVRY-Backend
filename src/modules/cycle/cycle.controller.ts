@@ -4,7 +4,8 @@ import { CycleService } from './cycle.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { UpsertCycleEntryDto } from './dto/cycle.dto';
-import { CycleEntryResponseDto, CyclePhaseInfoDto, DeleteCycleEntryResultDto } from './dto/cycle-response.dto';
+import { CycleCalendarResponseDto, CycleEntryResponseDto, CyclePhaseInfoDto, DeleteCycleEntryResultDto } from './dto/cycle-response.dto';
+import { CycleCalendarQueryDto } from './dto/cycle-calendar-query.dto';
 
 @ApiTags('cycle')
 @ApiExtraModels(CyclePhaseInfoDto)
@@ -35,6 +36,12 @@ export class CycleController {
   })
   today(@CurrentUser() u: AuthUser) {
     return this.svc.phaseInfo(u.id);
+  }
+
+  @Get('calendar')
+  @ApiResponse({ status: 200, description: 'Calendario acotado con semilla del periodo anterior.', type: CycleCalendarResponseDto })
+  calendar(@CurrentUser() u: AuthUser, @Query() query: CycleCalendarQueryDto) {
+    return this.svc.calendar(u.id, query.from, query.to);
   }
 
   @Delete('entries/:id')

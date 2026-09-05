@@ -254,6 +254,8 @@ describe('ProgressService', () => {
         name: 'Noche',
         endedAt: new Date('2026-08-19T04:59:00.000Z'),
         volumeKg: 0,
+        setCount: 0,
+        cyclePhase: null,
       },
       {
         date: '2026-08-19',
@@ -261,6 +263,8 @@ describe('ProgressService', () => {
         name: 'Mañana',
         endedAt: new Date('2026-08-19T15:00:00.000Z'),
         volumeKg: 500,
+        setCount: 2,
+        cyclePhase: 'LUTEAL',
       },
     ]);
 
@@ -272,11 +276,11 @@ describe('ProgressService', () => {
       days: [
         {
           date: '2026-08-18',
-          sessions: [{ id: 'workout-2', name: 'Noche', endedAt: '2026-08-19T04:59:00.000Z', volumeKg: 0 }],
+          sessions: [{ id: 'workout-2', name: 'Noche', endedAt: '2026-08-19T04:59:00.000Z', volumeKg: 0, setCount: 0, cyclePhase: null }],
         },
         {
           date: '2026-08-19',
-          sessions: [{ id: 'workout-1', name: 'Mañana', endedAt: '2026-08-19T15:00:00.000Z', volumeKg: 500 }],
+          sessions: [{ id: 'workout-1', name: 'Mañana', endedAt: '2026-08-19T15:00:00.000Z', volumeKg: 500, setCount: 2, cyclePhase: 'LUTEAL' }],
         },
       ],
     });

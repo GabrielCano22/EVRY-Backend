@@ -1,5 +1,5 @@
 import { ApiProperty, ApiSchema } from '@nestjs/swagger';
-import { MuscleGroup } from '@prisma/client';
+import { CyclePhase, MuscleGroup } from '@prisma/client';
 import type { OverviewMetrics, PeriodMetrics, ProgressPeriod } from '../progress.types';
 
 @ApiSchema({ name: 'ProgressPeriodWindow' })
@@ -180,6 +180,8 @@ export class ProgressActivitySessionDto {
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty({ type: String, format: 'date-time' }) endedAt!: string;
   @ApiProperty({ type: Number }) volumeKg!: number;
+  @ApiProperty({ type: 'integer', minimum: 0 }) setCount!: number;
+  @ApiProperty({ enum: CyclePhase, nullable: true }) cyclePhase!: CyclePhase | null;
 }
 
 @ApiSchema({ name: 'ProgressActivityDay' })

@@ -16,6 +16,14 @@ export class CycleEntryResponseDto {
   @ApiProperty({ type: Boolean }) isPeriodStart!: boolean;
 }
 
+@ApiSchema({ name: 'CycleCalendar' })
+export class CycleCalendarResponseDto {
+  @ApiProperty({ type: String, format: 'date' }) from!: string;
+  @ApiProperty({ type: String, format: 'date' }) to!: string;
+  @ApiProperty({ type: () => [CycleEntryResponseDto] }) entries!: CycleEntryResponseDto[];
+  @ApiProperty({ type: String, format: 'date', nullable: true }) previousPeriodStart!: string | null;
+}
+
 @ApiSchema({ name: 'CyclePhaseInfo' })
 export class CyclePhaseInfoDto implements PhaseInfo {
   @ApiProperty({ enum: CyclePhase }) phase!: CyclePhase;

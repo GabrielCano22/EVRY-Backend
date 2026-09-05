@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { CyclePhase } from '@prisma/client';
+import { CyclePhase, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpsertCycleEntryDto } from './dto/cycle.dto';
 import {
@@ -81,6 +81,33 @@ export class CycleService {
     return { ok: true };
   }
 
+  async calendar(userId: string, from: string, to: string, now: Date = new Date()) {
+    const fromLabel = this.civilDate(from);
+    const toLabel = this.civilDate(to);
+    if (fromLabel > toLabel) throw new BadRequestException('El inicio del rango no puede ser posterior al final.');
+    const inclusiveDays = this.dayDifference(fromLabel, toLabel) + 1;
+    if (inclusiveDays > 62) throw new BadRequestException('El rango no puede superar 62 días inclusivos.');
+    const today = todayCivilDate(undefined, now);
+    const recordedTo = toLabel < today ? toLabel : today;
+    return this.prisma.$transaction(async (tx) => {
+      await this.assertOptIn(userId, tx);
+      const entries = fromLabel <= recordedTo ? await tx.cycleEntry.findMany({
+        where: { userId, date: { gte: this.databaseDate(fromLabel), lte: this.databaseDate(recordedTo) } },
+        orderBy: { date: 'asc' },
+      }) : [];
+      const previous = await tx.cycleEntry.findFirst({
+        where: { userId, isPeriodStart: true, date: { lt: this.databaseDate(fromLabel), lte: this.databaseDate(today) } },
+        orderBy: { date: 'desc' },
+      });
+      return {
+        from: fromLabel,
+        to: toLabel,
+        entries,
+        previousPeriodStart: previous ? this.databaseDateLabel(previous.date) : null,
+      };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }
+
   async currentPhase(userId: string): Promise<CyclePhase | null> {
     const info = await this.phaseInfo(userId);
     return info?.phase ?? null;
@@ -152,8 +179,11 @@ export class CycleService {
     }
   }
 
-  private async assertOptIn(userId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({
+  private async assertOptIn(
+    userId: string,
+    client: Pick<PrismaService, 'user'> = this.prisma,
+  ): Promise<void> {
+    const user = await client.user.findUnique({
       where: { id: userId },
       select: { trackCycle: true },
     });
