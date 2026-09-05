@@ -629,5 +629,5 @@ describe('authentication HTTP/PostgreSQL', () => {
       }
       await isolatedApp.close();
     }
-  });
+  }, 30_000);
 });

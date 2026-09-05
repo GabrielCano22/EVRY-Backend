@@ -160,6 +160,29 @@ describe('workout lifecycle HTTP/PostgreSQL', () => {
     })).resolves.toBe(1);
   });
 
+  it('allows different users to add sets to independent workouts concurrently', async () => {
+    const [leftUser, rightUser] = await Promise.all([
+      createUser('cross-user-left'),
+      createUser('cross-user-right'),
+    ]);
+    const [leftExercise, rightExercise] = await Promise.all([
+      createExercise('cross-user-left-exercise', leftUser),
+      createExercise('cross-user-right-exercise', rightUser),
+    ]);
+    const [leftWorkout, rightWorkout] = await Promise.all([
+      postWorkout(leftUser, 'Cross-user left'),
+      postWorkout(rightUser, 'Cross-user right'),
+    ]);
+    expect([leftWorkout.status, rightWorkout.status]).toEqual([201, 201]);
+
+    const [leftSet, rightSet] = await Promise.all([
+      postSet(leftUser, leftWorkout.body.id, leftExercise.id, { reps: 5 }),
+      postSet(rightUser, rightWorkout.body.id, rightExercise.id, { reps: 5 }),
+    ]);
+
+    expect([leftSet.status, rightSet.status]).toEqual([201, 201]);
+  }, 30_000);
+
   it('deduplicates simultaneous set mutations and enforces workout and exercise ownership', async () => {
     const user = await createUser('set-race');
     const other = await createUser('set-race-other');
