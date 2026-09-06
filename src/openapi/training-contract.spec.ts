@@ -214,8 +214,19 @@ it('publishes typed progress metrics, nullable records and signed comparison del
 it('publishes cursor history, activity dates, and query defaults for both exercise-progress routes', () => {
   expect(schema('ExerciseProgress')).toMatchObject({ required: ['exerciseId', 'period', 'summary', 'comparison', 'points', 'history'], properties: {
     history: { $ref: '#/components/schemas/ExerciseProgressHistory' },
-    points: { type: 'array', items: { $ref: '#/components/schemas/ExerciseProgressPoint' } },
+    points: { type: 'array', maxItems: 120, items: { $ref: '#/components/schemas/ExerciseProgressPoint' } },
   } });
+  expect(schema('ExerciseProgressPoint')).toMatchObject({
+    required: ['from', 'to', 'sessionsCount', 'maxWeightKg', 'estimated1RMKg', 'volumeKg'],
+    properties: {
+      from: { type: 'string', format: 'date-time' },
+      to: { type: 'string', format: 'date-time' },
+      sessionsCount: { type: 'integer', minimum: 1 },
+      maxWeightKg: { type: 'number', nullable: true, minimum: 0 },
+      estimated1RMKg: { type: 'number', nullable: true, minimum: 0 },
+      volumeKg: { type: 'number', minimum: 0 },
+    },
+  });
   expect(schema('ExerciseProgressHistory')).toMatchObject({
     required: ['items', 'page', 'limit', 'total', 'hasMore', 'nextCursor'],
     properties: {

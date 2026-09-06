@@ -95,9 +95,9 @@ export interface ExerciseMetricSnapshot {
 }
 
 export interface ExerciseProgressPoint {
-  workoutId: string;
-  workoutName: string;
-  completedAt: string;
+  from: string;
+  to: string;
+  sessionsCount: number;
   maxWeightKg: number | null;
   estimated1RMKg: number | null;
   volumeKg: number;

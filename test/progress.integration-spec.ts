@@ -308,7 +308,7 @@ describe('progress HTTP/PostgreSQL', () => {
     });
   });
 
-  it('calculates independent records, real comparison and chronological workout points', async () => {
+  it('calculates independent records, real comparison and chronological aggregated points', async () => {
     const response = await get(`/api/progress/exercise/${globalExercise.id}?period=30d&page=1&limit=10`);
 
     expect(response.status).toBe(200);
@@ -352,10 +352,55 @@ describe('progress HTTP/PostgreSQL', () => {
         estimated1RMKg: 47.33,
       },
     });
-    expect(response.body.points.map((point: { workoutId: string }) => point.workoutId)).toEqual([
-      currentWorkoutOneId,
-      currentWorkoutTwoId,
+    expect(response.body.points).toEqual([
+      {
+        from: expect.any(String), to: expect.any(String), sessionsCount: 1,
+        maxWeightKg: 100, estimated1RMKg: 103.33, volumeKg: 100,
+      },
+      {
+        from: expect.any(String), to: expect.any(String), sessionsCount: 1,
+        maxWeightKg: 100, estimated1RMKg: 114, volumeKg: 820,
+      },
     ]);
+    expect(response.body.points[0].from).toBe(response.body.points[0].to);
+    expect(response.body.points[1].from).toBe(response.body.points[1].to);
+  });
+
+  it('bounds all-time chart data to 120 SQL-aggregated chronological points', async () => {
+    const actor = await createUser('bounded-points');
+    const workouts = Array.from({ length: 121 }, (_, index) => ({
+      id: `${prefix}-point-workout-${index.toString().padStart(3, '0')}`,
+      userId: actor.id,
+      name: `${prefix}-point-${index + 1}`,
+      startedAt: new Date(Date.UTC(2025, 0, 1, index, 0)),
+      endedAt: new Date(Date.UTC(2025, 0, 1, index, 30)),
+      status: 'COMPLETED' as const,
+    }));
+    await prisma.$transaction([
+      prisma.workout.createMany({ data: workouts }),
+      prisma.workoutSet.createMany({ data: workouts.map((workout, index) => ({
+        id: `${prefix}-point-set-${index.toString().padStart(3, '0')}`,
+        workoutId: workout.id,
+        exerciseId: globalExercise.id,
+        order: 0,
+        weightKg: index + 1,
+        reps: 10,
+        completedAt: workout.endedAt,
+        clientMutationId: 'bounded-point',
+      })) }),
+    ]);
+
+    const response = await get(`/api/progress/exercises/${globalExercise.id}?period=all&limit=1`, actor);
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary.sessionsCount).toBe(121);
+    expect(response.body.points).toHaveLength(120);
+    expect(response.body.points.reduce((total: number, point: { sessionsCount: number }) => total + point.sessionsCount, 0)).toBe(121);
+    expect(response.body.points.reduce((total: number, point: { volumeKg: number }) => total + point.volumeKg, 0)).toBe(73810);
+    expect(response.body.points[0]).toMatchObject({ sessionsCount: 2, maxWeightKg: 2, estimated1RMKg: 2.67, volumeKg: 30 });
+    expect(response.body.points[119]).toMatchObject({ sessionsCount: 1, maxWeightKg: 121, estimated1RMKg: 161.33, volumeKg: 1210 });
+    expect(response.body.points[0]).not.toHaveProperty('workoutId');
+    expect(response.body.points[0].from < response.body.points[119].to).toBe(true);
   });
 
   it('paginates workouts before their ordered eligible sets and handles an out-of-range page', async () => {

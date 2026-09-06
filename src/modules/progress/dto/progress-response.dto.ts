@@ -138,12 +138,12 @@ export class ExerciseProgressComparisonDto {
 
 @ApiSchema({ name: 'ExerciseProgressPoint' })
 export class ExerciseProgressPointDto {
-  @ApiProperty({ type: String }) workoutId!: string;
-  @ApiProperty({ type: String }) workoutName!: string;
-  @ApiProperty({ type: String, format: 'date-time' }) completedAt!: string;
-  @ApiProperty({ type: Number, nullable: true }) maxWeightKg!: number | null;
-  @ApiProperty({ type: Number, nullable: true }) estimated1RMKg!: number | null;
-  @ApiProperty({ type: Number }) volumeKg!: number;
+  @ApiProperty({ type: String, format: 'date-time' }) from!: string;
+  @ApiProperty({ type: String, format: 'date-time' }) to!: string;
+  @ApiProperty({ type: 'integer', minimum: 1 }) sessionsCount!: number;
+  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) maxWeightKg!: number | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimated1RMKg!: number | null;
+  @ApiProperty({ type: Number, minimum: 0 }) volumeKg!: number;
 }
 
 @ApiSchema({ name: 'ExerciseHistorySet' })
@@ -182,7 +182,7 @@ export class ExerciseProgressDto {
   @ApiProperty({ type: () => ProgressPeriodWindowDto }) period!: ProgressPeriodWindowDto;
   @ApiProperty({ type: () => ExerciseProgressSummaryDto }) summary!: ExerciseProgressSummaryDto;
   @ApiProperty({ type: () => ExerciseProgressComparisonDto, nullable: true }) comparison!: ExerciseProgressComparisonDto | null;
-  @ApiProperty({ type: () => [ExerciseProgressPointDto] }) points!: ExerciseProgressPointDto[];
+  @ApiProperty({ type: () => [ExerciseProgressPointDto], maxItems: 120 }) points!: ExerciseProgressPointDto[];
   @ApiProperty({ type: () => ExerciseProgressHistoryDto }) history!: ExerciseProgressHistoryDto;
 }
 

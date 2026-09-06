@@ -18,6 +18,7 @@ import type {
 } from './progress.types';
 
 const RECENT_WORKOUT_LIMIT = 5;
+const PROGRESS_POINT_LIMIT = 120;
 
 export type ProgressReader = Pick<Prisma.TransactionClient, '$queryRaw'>;
 
@@ -84,9 +85,9 @@ type RecordRow = {
 };
 
 type PointRow = {
-  workoutId: string;
-  workoutName: string;
-  completedAt: Date;
+  from: Date;
+  to: Date;
+  sessionsCount: bigint;
   maxWeightKg: number | null;
   estimated1RMKg: number | null;
   volumeKg: number;
@@ -317,39 +318,50 @@ export class ProgressRepository {
     input: ExerciseProgressRepositoryInput,
   ): Promise<ExerciseProgressPoint[]> {
     const rows = await tx.$queryRaw<PointRow[]>(Prisma.sql`
-      WITH filtered_workout AS MATERIALIZED (
-        SELECT w."id", w."name", w."endedAt"
+      WITH workout_point AS MATERIALIZED (
+        SELECT
+          w."id" AS "workoutId",
+          w."endedAt" AS "completedAt",
+          MAX(CASE WHEN ws."weightKg" > 0 THEN ws."weightKg" END)::double precision AS "maxWeightKg",
+          MAX(
+            CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0
+              THEN ws."weightKg" * (1 + ws."reps" / 30.0)
+            END
+          )::double precision AS "estimated1RMKg",
+          COALESCE(SUM(
+            CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0 THEN ws."weightKg" * ws."reps" ELSE 0 END
+          ), 0)::double precision AS "volumeKg"
         FROM "Workout" w
+        JOIN "WorkoutSet" ws ON ws."workoutId" = w."id"
         WHERE w."userId" = ${input.userId}
           AND w."endedAt" IS NOT NULL
           AND w."cancelledAt" IS NULL
           ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
+          AND ws."exerciseId" = ${input.exerciseId}
+          AND ws."isWarmup" = FALSE
+          AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+        GROUP BY w."id", w."endedAt"
+      ), bucketed AS MATERIALIZED (
+        SELECT
+          workout_point.*,
+          NTILE(${PROGRESS_POINT_LIMIT}) OVER (ORDER BY "completedAt" ASC, "workoutId" ASC) AS "bucket"
+        FROM workout_point
       )
       SELECT
-        w."id" AS "workoutId",
-        w."name" AS "workoutName",
-        w."endedAt" AS "completedAt",
-        MAX(CASE WHEN ws."weightKg" > 0 THEN ws."weightKg" END)::double precision AS "maxWeightKg",
-        MAX(
-          CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0
-            THEN ws."weightKg" * (1 + ws."reps" / 30.0)
-          END
-        )::double precision AS "estimated1RMKg",
-        COALESCE(SUM(
-          CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0 THEN ws."weightKg" * ws."reps" ELSE 0 END
-        ), 0)::double precision AS "volumeKg"
-      FROM filtered_workout w
-      JOIN "WorkoutSet" ws ON ws."workoutId" = w."id"
-      WHERE ws."exerciseId" = ${input.exerciseId}
-        AND ws."isWarmup" = FALSE
-        AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
-      GROUP BY w."id", w."name", w."endedAt"
-      ORDER BY w."endedAt" ASC, w."id" ASC
+        MIN("completedAt") AS "from",
+        MAX("completedAt") AS "to",
+        COUNT(*) AS "sessionsCount",
+        MAX("maxWeightKg")::double precision AS "maxWeightKg",
+        MAX("estimated1RMKg")::double precision AS "estimated1RMKg",
+        SUM("volumeKg")::double precision AS "volumeKg"
+      FROM bucketed
+      GROUP BY "bucket"
+      ORDER BY "bucket" ASC
     `);
     return rows.map((row) => ({
-      workoutId: row.workoutId,
-      workoutName: row.workoutName,
-      completedAt: row.completedAt.toISOString(),
+      from: row.from.toISOString(),
+      to: row.to.toISOString(),
+      sessionsCount: Number(row.sessionsCount),
       maxWeightKg: row.maxWeightKg === null ? null : roundMetric(row.maxWeightKg),
       estimated1RMKg: row.estimated1RMKg === null ? null : roundMetric(row.estimated1RMKg),
       volumeKg: roundMetric(row.volumeKg),
