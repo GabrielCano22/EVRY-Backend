@@ -18,6 +18,15 @@ export interface OverviewMetrics {
   weeklyFrequency: number;
 }
 
+export interface RecentWorkoutSummary {
+  id: string;
+  name: string;
+  startedAt: string;
+  endedAt: string;
+  setCount: number;
+  volumeKg: number;
+}
+
 export interface ProgressPeriodWindow {
   key: ProgressPeriod;
   from: CivilDate | null;
@@ -165,6 +174,8 @@ export interface ProgressOverviewResponse {
     workingSets: number;
     percentage: number;
   }>;
+  streakDays: number;
+  recentWorkouts: RecentWorkoutSummary[];
 }
 
 export interface ProgressActivityResponse {

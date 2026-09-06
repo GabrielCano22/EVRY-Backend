@@ -430,6 +430,22 @@ describe('progress HTTP/PostgreSQL', () => {
       activeDays: 3,
       weeklyFrequency: 0.93,
     });
+    expect(response.body.streakDays).toBe(3);
+    expect(response.body.recentWorkouts).toHaveLength(5);
+    expect(response.body.recentWorkouts[0]).toEqual({
+      id: expect.any(String),
+      name: `${prefix}-empty-current`,
+      startedAt: expect.any(String),
+      endedAt: expect.any(String),
+      setCount: 0,
+      volumeKg: 0,
+    });
+    expect(response.body.recentWorkouts[1]).toMatchObject({
+      name: `${prefix}-back-current`,
+      setCount: 1,
+      volumeKg: 400,
+    });
+    expect(response.body.recentWorkouts[0]).not.toHaveProperty('sets');
     expect(response.body.records).toHaveLength(3);
     expect(response.body.records.map((record: { exerciseId: string }) => record.exerciseId))
       .toEqual([globalExercise.id, globalExercise.id, globalExercise.id]);

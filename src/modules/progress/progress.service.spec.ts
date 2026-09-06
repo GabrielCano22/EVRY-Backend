@@ -58,6 +58,8 @@ describe('ProgressService', () => {
         previous: zeroOverview,
         records: [],
         muscleDistribution: [],
+        streakDays: 0,
+        recentWorkouts: [],
       }),
       getActivity: jest.fn().mockResolvedValue([]),
     };
@@ -196,6 +198,11 @@ describe('ProgressService', () => {
         achievedAt: '2026-08-19T14:00:00.000Z',
       }],
       muscleDistribution: [],
+      streakDays: 3,
+      recentWorkouts: [{
+        id: 'workout-1', name: 'Sesión reciente', startedAt: '2026-08-19T13:00:00.000Z',
+        endedAt: '2026-08-19T14:00:00.000Z', setCount: 4, volumeKg: 850,
+      }],
     });
 
     const result = await service.overview('user-1', { period: '30d' });
@@ -207,6 +214,8 @@ describe('ProgressService', () => {
         previous: { sessionsCompleted: 2, volumeKg: 500, activeDays: 2, weeklyFrequency: 0.47 },
         delta: { sessionsCompleted: 2, volumeKg: 700, activeDays: 1, weeklyFrequency: 0.46 },
       },
+      streakDays: 3,
+      recentWorkouts: [expect.objectContaining({ id: 'workout-1', setCount: 4, volumeKg: 850 })],
     });
     expect(prisma.$transaction).toHaveBeenLastCalledWith(
       expect.any(Function),
@@ -230,6 +239,8 @@ describe('ProgressService', () => {
       previous: null,
       records: [],
       muscleDistribution: [],
+      streakDays: 0,
+      recentWorkouts: [],
     });
 
     const result = await service.overview('user-1', { period: 'all' });

@@ -13,8 +13,11 @@ import type {
   OverviewMetrics,
   PeriodMetrics,
   ProgressPeriodWindow,
+  RecentWorkoutSummary,
   RepetitionRecord,
 } from './progress.types';
+
+const RECENT_WORKOUT_LIMIT = 5;
 
 export type ProgressReader = Pick<Prisma.TransactionClient, '$queryRaw'>;
 
@@ -49,6 +52,8 @@ export interface OverviewRepositoryResult {
     workingSets: number;
     percentage: number;
   }>;
+  streakDays: number;
+  recentWorkouts: RecentWorkoutSummary[];
 }
 
 export interface ActivityRepositoryRow {
@@ -132,6 +137,17 @@ type ActivityRow = {
   volumeKg: number;
   setCount: bigint;
   cyclePhase: CyclePhase | null;
+};
+
+type StreakRow = { streakDays: bigint };
+
+type RecentWorkoutRow = {
+  id: string;
+  name: string;
+  startedAt: Date;
+  endedAt: Date;
+  setCount: bigint;
+  volumeKg: number;
 };
 
 function rangeSql(fromInclusive: Date | null, toExclusive: Date): Prisma.Sql {
@@ -591,6 +607,64 @@ export class ProgressRepository {
       (sum, row) => sum + Number(row.workingSets),
       0,
     );
+    const [streakRow] = await tx.$queryRaw<StreakRow[]>(Prisma.sql`
+      WITH RECURSIVE active_day AS MATERIALIZED (
+        SELECT DISTINCT (
+          (w."endedAt" AT TIME ZONE 'UTC') AT TIME ZONE ${APP_TIME_ZONE}
+        )::date AS "day"
+        FROM "Workout" w
+        WHERE w."userId" = ${userId}
+          AND w."endedAt" IS NOT NULL
+          AND w."cancelledAt" IS NULL
+          AND w."endedAt" < ${period.toExclusive}
+      ), anchor AS (
+        SELECT CASE
+          WHEN EXISTS (SELECT 1 FROM active_day WHERE "day" = CAST(${period.to} AS date))
+            THEN CAST(${period.to} AS date)
+          WHEN EXISTS (SELECT 1 FROM active_day WHERE "day" = CAST(${period.to} AS date) - 1)
+            THEN CAST(${period.to} AS date) - 1
+          ELSE NULL
+        END AS "day"
+      ), streak("day") AS (
+        SELECT "day" FROM anchor WHERE "day" IS NOT NULL
+        UNION ALL
+        SELECT streak."day" - 1
+        FROM streak
+        WHERE EXISTS (
+          SELECT 1 FROM active_day WHERE active_day."day" = streak."day" - 1
+        )
+      )
+      SELECT COUNT(*) AS "streakDays" FROM streak
+    `);
+    const recentRows = await tx.$queryRaw<RecentWorkoutRow[]>(Prisma.sql`
+      WITH recent_workout AS (
+        SELECT w."id", w."name", w."startedAt", w."endedAt"
+        FROM "Workout" w
+        WHERE w."userId" = ${userId}
+          AND w."endedAt" IS NOT NULL
+          AND w."cancelledAt" IS NULL
+          AND w."endedAt" < ${period.toExclusive}
+        ORDER BY w."endedAt" DESC, w."id" DESC
+        LIMIT ${RECENT_WORKOUT_LIMIT}
+      )
+      SELECT
+        w."id" AS "id",
+        w."name" AS "name",
+        w."startedAt" AS "startedAt",
+        w."endedAt" AS "endedAt",
+        COUNT(ws."id") AS "setCount",
+        COALESCE(SUM(
+          CASE
+            WHEN ws."isWarmup" = FALSE AND ws."weightKg" > 0 AND ws."reps" > 0
+              THEN ws."weightKg" * ws."reps"
+            ELSE 0
+          END
+        ), 0)::double precision AS "volumeKg"
+      FROM recent_workout w
+      LEFT JOIN "WorkoutSet" ws ON ws."workoutId" = w."id"
+      GROUP BY w."id", w."name", w."startedAt", w."endedAt"
+      ORDER BY w."endedAt" DESC, w."id" DESC
+    `);
 
     return {
       current,
@@ -608,6 +682,15 @@ export class ProgressRepository {
         percentage: totalWorkingSets === 0
           ? 0
           : roundMetric(Number(row.workingSets) * 100 / totalWorkingSets),
+      })),
+      streakDays: Number(streakRow?.streakDays ?? 0n),
+      recentWorkouts: recentRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        startedAt: row.startedAt.toISOString(),
+        endedAt: row.endedAt.toISOString(),
+        setCount: Number(row.setCount),
+        volumeKg: roundMetric(row.volumeKg),
       })),
     };
   }

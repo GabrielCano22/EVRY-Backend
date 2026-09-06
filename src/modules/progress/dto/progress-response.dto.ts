@@ -49,6 +49,16 @@ export class MuscleDistributionDto {
   @ApiProperty({ type: Number, minimum: 0, maximum: 100 }) percentage!: number;
 }
 
+@ApiSchema({ name: 'RecentWorkoutSummary' })
+export class RecentWorkoutSummaryDto {
+  @ApiProperty({ type: String }) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String, format: 'date-time' }) startedAt!: string;
+  @ApiProperty({ type: String, format: 'date-time' }) endedAt!: string;
+  @ApiProperty({ type: 'integer', minimum: 0 }) setCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) volumeKg!: number;
+}
+
 @ApiSchema({ name: 'ProgressOverview' })
 export class ProgressOverviewDto {
   @ApiProperty({ type: () => ProgressPeriodWindowDto }) period!: ProgressPeriodWindowDto;
@@ -56,6 +66,8 @@ export class ProgressOverviewDto {
   @ApiProperty({ type: () => OverviewComparisonDto, nullable: true }) comparison!: OverviewComparisonDto | null;
   @ApiProperty({ type: () => [ProgressRecordDto] }) records!: ProgressRecordDto[];
   @ApiProperty({ type: () => [MuscleDistributionDto] }) muscleDistribution!: MuscleDistributionDto[];
+  @ApiProperty({ type: 'integer', minimum: 0 }) streakDays!: number;
+  @ApiProperty({ type: () => [RecentWorkoutSummaryDto], maxItems: 5 }) recentWorkouts!: RecentWorkoutSummaryDto[];
 }
 
 @ApiSchema({ name: 'BestWeightRecord' })

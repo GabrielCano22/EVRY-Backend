@@ -167,13 +167,24 @@ it('describes sync limits, nullable inputs, mapping and canonical conflict paylo
 
 it('publishes typed progress metrics, nullable records and signed comparison deltas', () => {
   expect(schema('ProgressOverview')).toMatchObject({
-    required: ['period', 'summary', 'comparison', 'records', 'muscleDistribution'],
+    required: ['period', 'summary', 'comparison', 'records', 'muscleDistribution', 'streakDays', 'recentWorkouts'],
     properties: {
       period: { $ref: '#/components/schemas/ProgressPeriodWindow' },
       summary: { $ref: '#/components/schemas/OverviewMetrics' },
       comparison: { nullable: true, allOf: [{ $ref: '#/components/schemas/OverviewComparison' }] },
       records: { type: 'array', items: { $ref: '#/components/schemas/ProgressRecord' } },
       muscleDistribution: { type: 'array', items: { $ref: '#/components/schemas/MuscleDistribution' } },
+      streakDays: { type: 'integer', minimum: 0 },
+      recentWorkouts: { type: 'array', maxItems: 5, items: { $ref: '#/components/schemas/RecentWorkoutSummary' } },
+    },
+  });
+  expect(schema('RecentWorkoutSummary')).toMatchObject({
+    required: ['id', 'name', 'startedAt', 'endedAt', 'setCount', 'volumeKg'],
+    properties: {
+      startedAt: { type: 'string', format: 'date-time' },
+      endedAt: { type: 'string', format: 'date-time' },
+      setCount: { type: 'integer', minimum: 0 },
+      volumeKg: { type: 'number', minimum: 0 },
     },
   });
   expect(schema('ProgressPeriodWindow')).toMatchObject({ properties: {

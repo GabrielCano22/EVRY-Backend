@@ -106,6 +106,8 @@ export class ProgressService {
         } : null,
         records: result.records,
         muscleDistribution: result.muscleDistribution,
+        streakDays: result.streakDays,
+        recentWorkouts: result.recentWorkouts,
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   }
