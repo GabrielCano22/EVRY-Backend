@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { MuscleGroup, Prisma } from '@prisma/client';
+import { CyclePhase, MuscleGroup, Prisma } from '@prisma/client';
 import { APP_TIME_ZONE, type CivilDate } from '../../common/dates/civil-date';
 import { roundMetric } from './metrics';
 import { encodeHistoryCursor, type HistoryPosition } from './history-cursor';
@@ -13,8 +13,12 @@ import type {
   OverviewMetrics,
   PeriodMetrics,
   ProgressPeriodWindow,
+  RecentWorkoutSummary,
   RepetitionRecord,
 } from './progress.types';
+
+const RECENT_WORKOUT_LIMIT = 5;
+const PROGRESS_POINT_LIMIT = 120;
 
 export type ProgressReader = Pick<Prisma.TransactionClient, '$queryRaw'>;
 
@@ -49,6 +53,8 @@ export interface OverviewRepositoryResult {
     workingSets: number;
     percentage: number;
   }>;
+  streakDays: number;
+  recentWorkouts: RecentWorkoutSummary[];
 }
 
 export interface ActivityRepositoryRow {
@@ -57,6 +63,8 @@ export interface ActivityRepositoryRow {
   name: string;
   endedAt: Date;
   volumeKg: number;
+  setCount: number;
+  cyclePhase: CyclePhase | null;
 }
 
 type MetricRow = {
@@ -77,9 +85,9 @@ type RecordRow = {
 };
 
 type PointRow = {
-  workoutId: string;
-  workoutName: string;
-  completedAt: Date;
+  from: Date;
+  to: Date;
+  sessionsCount: bigint;
   maxWeightKg: number | null;
   estimated1RMKg: number | null;
   volumeKg: number;
@@ -127,6 +135,19 @@ type ActivityRow = {
   id: string;
   name: string;
   endedAt: Date;
+  volumeKg: number;
+  setCount: bigint;
+  cyclePhase: CyclePhase | null;
+};
+
+type StreakRow = { streakDays: bigint };
+
+type RecentWorkoutRow = {
+  id: string;
+  name: string;
+  startedAt: Date;
+  endedAt: Date;
+  setCount: bigint;
   volumeKg: number;
 };
 
@@ -297,39 +318,50 @@ export class ProgressRepository {
     input: ExerciseProgressRepositoryInput,
   ): Promise<ExerciseProgressPoint[]> {
     const rows = await tx.$queryRaw<PointRow[]>(Prisma.sql`
-      WITH filtered_workout AS MATERIALIZED (
-        SELECT w."id", w."name", w."endedAt"
+      WITH workout_point AS MATERIALIZED (
+        SELECT
+          w."id" AS "workoutId",
+          w."endedAt" AS "completedAt",
+          MAX(CASE WHEN ws."weightKg" > 0 THEN ws."weightKg" END)::double precision AS "maxWeightKg",
+          MAX(
+            CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0
+              THEN ws."weightKg" * (1 + ws."reps" / 30.0)
+            END
+          )::double precision AS "estimated1RMKg",
+          COALESCE(SUM(
+            CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0 THEN ws."weightKg" * ws."reps" ELSE 0 END
+          ), 0)::double precision AS "volumeKg"
         FROM "Workout" w
+        JOIN "WorkoutSet" ws ON ws."workoutId" = w."id"
         WHERE w."userId" = ${input.userId}
           AND w."endedAt" IS NOT NULL
           AND w."cancelledAt" IS NULL
           ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
+          AND ws."exerciseId" = ${input.exerciseId}
+          AND ws."isWarmup" = FALSE
+          AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+        GROUP BY w."id", w."endedAt"
+      ), bucketed AS MATERIALIZED (
+        SELECT
+          workout_point.*,
+          NTILE(${PROGRESS_POINT_LIMIT}) OVER (ORDER BY "completedAt" ASC, "workoutId" ASC) AS "bucket"
+        FROM workout_point
       )
       SELECT
-        w."id" AS "workoutId",
-        w."name" AS "workoutName",
-        w."endedAt" AS "completedAt",
-        MAX(CASE WHEN ws."weightKg" > 0 THEN ws."weightKg" END)::double precision AS "maxWeightKg",
-        MAX(
-          CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0
-            THEN ws."weightKg" * (1 + ws."reps" / 30.0)
-          END
-        )::double precision AS "estimated1RMKg",
-        COALESCE(SUM(
-          CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0 THEN ws."weightKg" * ws."reps" ELSE 0 END
-        ), 0)::double precision AS "volumeKg"
-      FROM filtered_workout w
-      JOIN "WorkoutSet" ws ON ws."workoutId" = w."id"
-      WHERE ws."exerciseId" = ${input.exerciseId}
-        AND ws."isWarmup" = FALSE
-        AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
-      GROUP BY w."id", w."name", w."endedAt"
-      ORDER BY w."endedAt" ASC, w."id" ASC
+        MIN("completedAt") AS "from",
+        MAX("completedAt") AS "to",
+        COUNT(*) AS "sessionsCount",
+        MAX("maxWeightKg")::double precision AS "maxWeightKg",
+        MAX("estimated1RMKg")::double precision AS "estimated1RMKg",
+        SUM("volumeKg")::double precision AS "volumeKg"
+      FROM bucketed
+      GROUP BY "bucket"
+      ORDER BY "bucket" ASC
     `);
     return rows.map((row) => ({
-      workoutId: row.workoutId,
-      workoutName: row.workoutName,
-      completedAt: row.completedAt.toISOString(),
+      from: row.from.toISOString(),
+      to: row.to.toISOString(),
+      sessionsCount: Number(row.sessionsCount),
       maxWeightKg: row.maxWeightKg === null ? null : roundMetric(row.maxWeightKg),
       estimated1RMKg: row.estimated1RMKg === null ? null : roundMetric(row.estimated1RMKg),
       volumeKg: roundMetric(row.volumeKg),
@@ -587,6 +619,64 @@ export class ProgressRepository {
       (sum, row) => sum + Number(row.workingSets),
       0,
     );
+    const [streakRow] = await tx.$queryRaw<StreakRow[]>(Prisma.sql`
+      WITH RECURSIVE active_day AS MATERIALIZED (
+        SELECT DISTINCT (
+          (w."endedAt" AT TIME ZONE 'UTC') AT TIME ZONE ${APP_TIME_ZONE}
+        )::date AS "day"
+        FROM "Workout" w
+        WHERE w."userId" = ${userId}
+          AND w."endedAt" IS NOT NULL
+          AND w."cancelledAt" IS NULL
+          AND w."endedAt" < ${period.toExclusive}
+      ), anchor AS (
+        SELECT CASE
+          WHEN EXISTS (SELECT 1 FROM active_day WHERE "day" = CAST(${period.to} AS date))
+            THEN CAST(${period.to} AS date)
+          WHEN EXISTS (SELECT 1 FROM active_day WHERE "day" = CAST(${period.to} AS date) - 1)
+            THEN CAST(${period.to} AS date) - 1
+          ELSE NULL
+        END AS "day"
+      ), streak("day") AS (
+        SELECT "day" FROM anchor WHERE "day" IS NOT NULL
+        UNION ALL
+        SELECT streak."day" - 1
+        FROM streak
+        WHERE EXISTS (
+          SELECT 1 FROM active_day WHERE active_day."day" = streak."day" - 1
+        )
+      )
+      SELECT COUNT(*) AS "streakDays" FROM streak
+    `);
+    const recentRows = await tx.$queryRaw<RecentWorkoutRow[]>(Prisma.sql`
+      WITH recent_workout AS (
+        SELECT w."id", w."name", w."startedAt", w."endedAt"
+        FROM "Workout" w
+        WHERE w."userId" = ${userId}
+          AND w."endedAt" IS NOT NULL
+          AND w."cancelledAt" IS NULL
+          AND w."endedAt" < ${period.toExclusive}
+        ORDER BY w."endedAt" DESC, w."id" DESC
+        LIMIT ${RECENT_WORKOUT_LIMIT}
+      )
+      SELECT
+        w."id" AS "id",
+        w."name" AS "name",
+        w."startedAt" AS "startedAt",
+        w."endedAt" AS "endedAt",
+        COUNT(ws."id") AS "setCount",
+        COALESCE(SUM(
+          CASE
+            WHEN ws."isWarmup" = FALSE AND ws."weightKg" > 0 AND ws."reps" > 0
+              THEN ws."weightKg" * ws."reps"
+            ELSE 0
+          END
+        ), 0)::double precision AS "volumeKg"
+      FROM recent_workout w
+      LEFT JOIN "WorkoutSet" ws ON ws."workoutId" = w."id"
+      GROUP BY w."id", w."name", w."startedAt", w."endedAt"
+      ORDER BY w."endedAt" DESC, w."id" DESC
+    `);
 
     return {
       current,
@@ -605,6 +695,15 @@ export class ProgressRepository {
           ? 0
           : roundMetric(Number(row.workingSets) * 100 / totalWorkingSets),
       })),
+      streakDays: Number(streakRow?.streakDays ?? 0n),
+      recentWorkouts: recentRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        startedAt: row.startedAt.toISOString(),
+        endedAt: row.endedAt.toISOString(),
+        setCount: Number(row.setCount),
+        volumeKg: roundMetric(row.volumeKg),
+      })),
     };
   }
 
@@ -622,6 +721,8 @@ export class ProgressRepository {
         w."id" AS "id",
         w."name" AS "name",
         w."endedAt" AS "endedAt",
+        w."cyclePhase" AS "cyclePhase",
+        (SELECT COUNT(*) FROM "WorkoutSet" ws_count WHERE ws_count."workoutId" = w."id") AS "setCount",
         COALESCE(SUM(
           CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0 THEN ws."weightKg" * ws."reps" ELSE 0 END
         ), 0)::double precision AS "volumeKg"
@@ -635,7 +736,7 @@ export class ProgressRepository {
         AND w."cancelledAt" IS NULL
         AND w."endedAt" >= ${window.fromInclusive}
         AND w."endedAt" < ${window.toExclusive}
-      GROUP BY w."id", w."name", w."endedAt"
+      GROUP BY w."id", w."name", w."endedAt", w."cyclePhase"
       ORDER BY "date" ASC, w."endedAt" ASC, w."id" ASC
     `);
     return rows.map((row) => ({
@@ -644,6 +745,8 @@ export class ProgressRepository {
       name: row.name,
       endedAt: row.endedAt,
       volumeKg: roundMetric(row.volumeKg),
+      setCount: Number(row.setCount),
+      cyclePhase: row.cyclePhase,
     }));
   }
 }

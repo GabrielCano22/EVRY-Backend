@@ -1,4 +1,5 @@
 import { RATE_LIMIT_METADATA } from '../../common/rate-limit/rate-limit.decorator';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { AuthController } from './auth.controller';
 import { MobileAuthController } from './mobile-auth.controller';
 
@@ -16,6 +17,19 @@ describe('AuthController rate limits', () => {
       ttlMs: 60_000,
     });
   });
+});
+
+describe('AuthController browser-origin protection', () => {
+  it.each(['register', 'login', 'refresh', 'logout'] as const)(
+    'requires a validated browser Origin for %s',
+    (handler) => {
+      const descriptor = Object.getOwnPropertyDescriptor(AuthController.prototype, handler);
+
+      expect(Reflect.getMetadata(GUARDS_METADATA, descriptor!.value)).toEqual(
+        expect.arrayContaining([expect.any(Function)]),
+      );
+    },
+  );
 });
 
 describe('MobileAuthController', () => {

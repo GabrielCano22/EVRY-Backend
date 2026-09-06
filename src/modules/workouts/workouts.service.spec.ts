@@ -200,6 +200,22 @@ describe('WorkoutsService', () => {
   });
 
   it.each([
+    { index: 'WorkoutSet_workoutId_clientMutationId_key' },
+    { fields: ['workoutId', 'clientMutationId'] },
+  ])('recovers an idempotent series mutation from Prisma 7 adapter constraint %j', async (constraint) => {
+    const canonical = { id: 'set-adapter-winner', workoutId: 'workout-1', clientMutationId: mutationId };
+    const error = new Prisma.PrismaClientKnownRequestError('unique violation', {
+      clientVersion: '7.10.0', code: 'P2002', meta: {
+        driverAdapterError: { cause: { kind: 'UniqueConstraintViolation', constraint } },
+      },
+    });
+    const { service } = makeHarness({ transactionError: error, canonicalSet: canonical });
+    await expect(service.addSet('user-1', 'workout-1', {
+      clientMutationId: mutationId, exerciseId: 'exercise-1', order: 0, reps: 10,
+    })).resolves.toBe(canonical);
+  });
+
+  it.each([
     ['finished', { endedAt: new Date('2026-08-20T11:00:00.000Z') }],
     ['cancelled', { cancelledAt: new Date('2026-08-20T11:00:00.000Z') }],
   ])('rejects add, update, delete, and workout patch after a session is %s', async (_state, terminal) => {

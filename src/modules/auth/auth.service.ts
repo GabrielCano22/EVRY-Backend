@@ -91,19 +91,29 @@ export class AuthService {
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
-      if (!(error instanceof ConcurrentRefreshError)) throw error;
+      const isSerializableCollision = error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === 'P2034';
+      if (!(error instanceof ConcurrentRefreshError) && !isSerializableCollision) throw error;
       await this.revokeFamily(record.familyId);
       throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
     }
   }
 
-  async logout(refreshToken: string) {
+  async logout(
+    refreshToken: string,
+    platform: RefreshTokenPlatform = 'WEB',
+  ) {
     const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
     const record = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
-      select: { familyId: true },
+      select: { familyId: true, platform: true },
     });
-    if (record) await this.revokeFamily(record.familyId);
+    if (record) {
+      await this.revokeFamily(record.familyId);
+      if (record.platform !== platform) {
+        throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
+      }
+    }
     return { ok: true };
   }
 

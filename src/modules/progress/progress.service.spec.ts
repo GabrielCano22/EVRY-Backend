@@ -58,6 +58,8 @@ describe('ProgressService', () => {
         previous: zeroOverview,
         records: [],
         muscleDistribution: [],
+        streakDays: 0,
+        recentWorkouts: [],
       }),
       getActivity: jest.fn().mockResolvedValue([]),
     };
@@ -196,6 +198,11 @@ describe('ProgressService', () => {
         achievedAt: '2026-08-19T14:00:00.000Z',
       }],
       muscleDistribution: [],
+      streakDays: 3,
+      recentWorkouts: [{
+        id: 'workout-1', name: 'Sesión reciente', startedAt: '2026-08-19T13:00:00.000Z',
+        endedAt: '2026-08-19T14:00:00.000Z', setCount: 4, volumeKg: 850,
+      }],
     });
 
     const result = await service.overview('user-1', { period: '30d' });
@@ -207,6 +214,8 @@ describe('ProgressService', () => {
         previous: { sessionsCompleted: 2, volumeKg: 500, activeDays: 2, weeklyFrequency: 0.47 },
         delta: { sessionsCompleted: 2, volumeKg: 700, activeDays: 1, weeklyFrequency: 0.46 },
       },
+      streakDays: 3,
+      recentWorkouts: [expect.objectContaining({ id: 'workout-1', setCount: 4, volumeKg: 850 })],
     });
     expect(prisma.$transaction).toHaveBeenLastCalledWith(
       expect.any(Function),
@@ -230,6 +239,8 @@ describe('ProgressService', () => {
       previous: null,
       records: [],
       muscleDistribution: [],
+      streakDays: 0,
+      recentWorkouts: [],
     });
 
     const result = await service.overview('user-1', { period: 'all' });
@@ -254,6 +265,8 @@ describe('ProgressService', () => {
         name: 'Noche',
         endedAt: new Date('2026-08-19T04:59:00.000Z'),
         volumeKg: 0,
+        setCount: 0,
+        cyclePhase: null,
       },
       {
         date: '2026-08-19',
@@ -261,6 +274,8 @@ describe('ProgressService', () => {
         name: 'Mañana',
         endedAt: new Date('2026-08-19T15:00:00.000Z'),
         volumeKg: 500,
+        setCount: 2,
+        cyclePhase: 'LUTEAL',
       },
     ]);
 
@@ -272,11 +287,11 @@ describe('ProgressService', () => {
       days: [
         {
           date: '2026-08-18',
-          sessions: [{ id: 'workout-2', name: 'Noche', endedAt: '2026-08-19T04:59:00.000Z', volumeKg: 0 }],
+          sessions: [{ id: 'workout-2', name: 'Noche', endedAt: '2026-08-19T04:59:00.000Z', volumeKg: 0, setCount: 0, cyclePhase: null }],
         },
         {
           date: '2026-08-19',
-          sessions: [{ id: 'workout-1', name: 'Mañana', endedAt: '2026-08-19T15:00:00.000Z', volumeKg: 500 }],
+          sessions: [{ id: 'workout-1', name: 'Mañana', endedAt: '2026-08-19T15:00:00.000Z', volumeKg: 500, setCount: 2, cyclePhase: 'LUTEAL' }],
         },
       ],
     });

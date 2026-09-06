@@ -106,6 +106,8 @@ export class ProgressService {
         } : null,
         records: result.records,
         muscleDistribution: result.muscleDistribution,
+        streakDays: result.streakDays,
+        recentWorkouts: result.recentWorkouts,
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   }
@@ -140,6 +142,8 @@ export class ProgressService {
         name: row.name,
         endedAt: row.endedAt.toISOString(),
         volumeKg: row.volumeKg,
+        setCount: row.setCount,
+        cyclePhase: row.cyclePhase,
       });
       days.set(row.date, day);
     }

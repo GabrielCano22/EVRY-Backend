@@ -65,9 +65,10 @@ describe('exercise media middleware', () => {
   const realAssets = join(process.cwd(), 'assets', 'exercises');
   const gifPath = '/media/exercises/videos/0001-2gPfomN.gif';
 
-  it('normalizes configured origins once for global and media CORS', () => {
+  it('normalizes only explicitly configured origins for global and media CORS', () => {
     expect(configuredCorsOrigins(' http://localhost:3000,https://evry.test,http://localhost:3000 '))
-      .toEqual(['http://localhost:3000', 'https://evry.test', 'http://127.0.0.1:3000']);
+      .toEqual(['http://localhost:3000', 'https://evry.test']);
+    expect(configuredCorsOrigins('')).toEqual([]);
   });
 
   it('exposes validators and lengths to an allowed origin with revalidatable caching', async () => {

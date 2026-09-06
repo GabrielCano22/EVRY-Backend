@@ -64,9 +64,9 @@ Los filtros de Prisma normalizan conflictos, referencias, ausencias y problemas 
 
 El proceso se niega a iniciar si faltan la URL PostgreSQL, los dos secretos distintos, `PORT`, `SWAGGER_ENABLED` o `CORS_ORIGIN`. Prisma 7 usa `prisma.config.ts` para migraciones y el adaptador PostgreSQL en runtime.
 
-## CI y staging
+## CI y política de despliegue
 
-`.github/workflows/ci.yml` levanta PostgreSQL 17 aislado y ejecuta validate/generate, lint, build, pruebas unitarias, migraciones e integración. `render.yaml` define el servicio gratuito de staging y su health check. Como Render Free no ofrece pre-deploy separado, `prisma migrate deploy` se ejecuta antes de iniciar el proceso y es idempotente. Los valores `DATABASE_URL`, `CORS_ORIGIN` y `MEDIA_BASE_URL` deben configurarse en Render. Consulte `docs/operations/migration-runbook.md` antes de tocar datos conservados.
+`.github/workflows/ci.yml` levanta PostgreSQL 17 aislado y ejecuta validate/generate, lint, build, pruebas unitarias, migraciones e integración. EVRY no se despliega ni crea infraestructura externa sin autorización explícita del propietario. Render y Cloudflare no forman parte de la arquitectura aprobada; si más adelante se autoriza un despliegue, web, API y servicios administrados se configurarán desde Vercel. Consulte `docs/operations/migration-runbook.md` antes de tocar datos conservados.
 
 La migración `20260819090000_release_invariants` es expandible: añade campos nullable a sesiones y series, emite un reporte agregado de sesiones activas duplicadas, conserva la más reciente y marca las anteriores como canceladas. Después crea la unicidad parcial de una sesión activa por usuario, índices de consulta y la unicidad de `clientMutationId` por sesión. No elimina sesiones ni series.
 

@@ -55,10 +55,18 @@ describe('authentication rate limits', () => {
     const body = { email: 'user@example.com', password: 'valid-password' };
 
     for (let requestNumber = 0; requestNumber < 5; requestNumber += 1) {
-      await request(server).post('/auth/login').send(body).expect(200);
+      await request(server)
+        .post('/auth/login')
+        .set('Origin', environment.CORS_ORIGIN)
+        .send(body)
+        .expect(200);
     }
 
-    const response = await request(server).post('/auth/login').send(body).expect(429);
+    const response = await request(server)
+      .post('/auth/login')
+      .set('Origin', environment.CORS_ORIGIN)
+      .send(body)
+      .expect(429);
 
     expect(response.body).toMatchObject({ statusCode: 429 });
     expect(response.headers['retry-after']).toBeDefined();

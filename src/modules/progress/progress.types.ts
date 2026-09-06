@@ -1,4 +1,4 @@
-import type { MuscleGroup } from '@prisma/client';
+import type { CyclePhase, MuscleGroup } from '@prisma/client';
 import type { CivilDate } from '../../common/dates/civil-date';
 
 export type ProgressPeriod = '30d' | '90d' | '6m' | '1y' | 'all';
@@ -16,6 +16,15 @@ export interface OverviewMetrics {
   volumeKg: number;
   activeDays: number;
   weeklyFrequency: number;
+}
+
+export interface RecentWorkoutSummary {
+  id: string;
+  name: string;
+  startedAt: string;
+  endedAt: string;
+  setCount: number;
+  volumeKg: number;
 }
 
 export interface ProgressPeriodWindow {
@@ -86,9 +95,9 @@ export interface ExerciseMetricSnapshot {
 }
 
 export interface ExerciseProgressPoint {
-  workoutId: string;
-  workoutName: string;
-  completedAt: string;
+  from: string;
+  to: string;
+  sessionsCount: number;
   maxWeightKg: number | null;
   estimated1RMKg: number | null;
   volumeKg: number;
@@ -165,6 +174,8 @@ export interface ProgressOverviewResponse {
     workingSets: number;
     percentage: number;
   }>;
+  streakDays: number;
+  recentWorkouts: RecentWorkoutSummary[];
 }
 
 export interface ProgressActivityResponse {
@@ -172,6 +183,6 @@ export interface ProgressActivityResponse {
   to: CivilDate;
   days: Array<{
     date: CivilDate;
-    sessions: Array<{ id: string; name: string; endedAt: string; volumeKg: number }>;
+    sessions: Array<{ id: string; name: string; endedAt: string; volumeKg: number; setCount: number; cyclePhase: CyclePhase | null }>;
   }>;
 }

@@ -308,7 +308,7 @@ describe('progress HTTP/PostgreSQL', () => {
     });
   });
 
-  it('calculates independent records, real comparison and chronological workout points', async () => {
+  it('calculates independent records, real comparison and chronological aggregated points', async () => {
     const response = await get(`/api/progress/exercise/${globalExercise.id}?period=30d&page=1&limit=10`);
 
     expect(response.status).toBe(200);
@@ -352,10 +352,55 @@ describe('progress HTTP/PostgreSQL', () => {
         estimated1RMKg: 47.33,
       },
     });
-    expect(response.body.points.map((point: { workoutId: string }) => point.workoutId)).toEqual([
-      currentWorkoutOneId,
-      currentWorkoutTwoId,
+    expect(response.body.points).toEqual([
+      {
+        from: expect.any(String), to: expect.any(String), sessionsCount: 1,
+        maxWeightKg: 100, estimated1RMKg: 103.33, volumeKg: 100,
+      },
+      {
+        from: expect.any(String), to: expect.any(String), sessionsCount: 1,
+        maxWeightKg: 100, estimated1RMKg: 114, volumeKg: 820,
+      },
     ]);
+    expect(response.body.points[0].from).toBe(response.body.points[0].to);
+    expect(response.body.points[1].from).toBe(response.body.points[1].to);
+  });
+
+  it('bounds all-time chart data to 120 SQL-aggregated chronological points', async () => {
+    const actor = await createUser('bounded-points');
+    const workouts = Array.from({ length: 121 }, (_, index) => ({
+      id: `${prefix}-point-workout-${index.toString().padStart(3, '0')}`,
+      userId: actor.id,
+      name: `${prefix}-point-${index + 1}`,
+      startedAt: new Date(Date.UTC(2025, 0, 1, index, 0)),
+      endedAt: new Date(Date.UTC(2025, 0, 1, index, 30)),
+      status: 'COMPLETED' as const,
+    }));
+    await prisma.$transaction([
+      prisma.workout.createMany({ data: workouts }),
+      prisma.workoutSet.createMany({ data: workouts.map((workout, index) => ({
+        id: `${prefix}-point-set-${index.toString().padStart(3, '0')}`,
+        workoutId: workout.id,
+        exerciseId: globalExercise.id,
+        order: 0,
+        weightKg: index + 1,
+        reps: 10,
+        completedAt: workout.endedAt,
+        clientMutationId: 'bounded-point',
+      })) }),
+    ]);
+
+    const response = await get(`/api/progress/exercises/${globalExercise.id}?period=all&limit=1`, actor);
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary.sessionsCount).toBe(121);
+    expect(response.body.points).toHaveLength(120);
+    expect(response.body.points.reduce((total: number, point: { sessionsCount: number }) => total + point.sessionsCount, 0)).toBe(121);
+    expect(response.body.points.reduce((total: number, point: { volumeKg: number }) => total + point.volumeKg, 0)).toBe(73810);
+    expect(response.body.points[0]).toMatchObject({ sessionsCount: 2, maxWeightKg: 2, estimated1RMKg: 2.67, volumeKg: 30 });
+    expect(response.body.points[119]).toMatchObject({ sessionsCount: 1, maxWeightKg: 121, estimated1RMKg: 161.33, volumeKg: 1210 });
+    expect(response.body.points[0]).not.toHaveProperty('workoutId');
+    expect(response.body.points[0].from < response.body.points[119].to).toBe(true);
   });
 
   it('paginates workouts before their ordered eligible sets and handles an out-of-range page', async () => {
@@ -430,6 +475,22 @@ describe('progress HTTP/PostgreSQL', () => {
       activeDays: 3,
       weeklyFrequency: 0.93,
     });
+    expect(response.body.streakDays).toBe(3);
+    expect(response.body.recentWorkouts).toHaveLength(5);
+    expect(response.body.recentWorkouts[0]).toEqual({
+      id: expect.any(String),
+      name: `${prefix}-empty-current`,
+      startedAt: expect.any(String),
+      endedAt: expect.any(String),
+      setCount: 0,
+      volumeKg: 0,
+    });
+    expect(response.body.recentWorkouts[1]).toMatchObject({
+      name: `${prefix}-back-current`,
+      setCount: 1,
+      volumeKg: 400,
+    });
+    expect(response.body.recentWorkouts[0]).not.toHaveProperty('sets');
     expect(response.body.records).toHaveLength(3);
     expect(response.body.records.map((record: { exerciseId: string }) => record.exerciseId))
       .toEqual([globalExercise.id, globalExercise.id, globalExercise.id]);
@@ -493,5 +554,29 @@ describe('progress HTTP/PostgreSQL', () => {
   it('exposes activity dates matching the shared civil formatter', async () => {
     expect(formatCivilDate(new Date('2026-01-15T04:59:00.000Z'))).toBe('2026-01-14');
     expect(formatCivilDate(new Date('2026-01-15T05:01:00.000Z'))).toBe('2026-01-15');
+  });
+
+  it('returns bounded scalar calendar metadata despite more than 200 historical workouts', async () => {
+    const actor = await createUser('calendar-density');
+    await prisma.workout.createMany({ data: Array.from({ length: 205 }, (_, index) => ({
+      userId: actor.id, name: `${prefix}-history-${index}`, status: 'COMPLETED' as const,
+      startedAt: new Date('2025-06-01T10:00:00Z'), endedAt: new Date('2025-06-01T11:00:00Z'),
+    })) });
+    const visible = await createWorkout(actor, 'visible', new Date('2026-01-15T04:59:00Z'), [
+      { exercise: globalExercise, values: { weightKg: 100, reps: 20, isWarmup: true } },
+      { exercise: globalExercise, values: { weightKg: 40, reps: 10 } },
+    ]);
+    await prisma.workout.update({ where: { id: visible }, data: { cyclePhase: 'LUTEAL' } });
+    await createWorkout(actor, 'next-day', new Date('2026-01-15T05:01:00Z'), []);
+    await createWorkout(actor, 'cancelled-visible', new Date('2026-01-15T06:00:00Z'), [], new Date('2026-01-15T06:01:00Z'));
+    await createWorkout(actor, 'active-visible', null, []);
+    const calendar = await get('/api/progress/activity?from=2026-01-01&to=2026-01-31', actor);
+    expect(calendar.status).toBe(200);
+    expect(calendar.body.days.map((day: { date: string }) => day.date)).toEqual(['2026-01-14', '2026-01-15']);
+    expect(calendar.body.days[0].sessions).toHaveLength(1);
+    expect(calendar.body.days[0].sessions[0]).toMatchObject({ id: visible, setCount: 2, volumeKg: 400, cyclePhase: 'LUTEAL' });
+    expect(calendar.body.days[0].sessions[0]).not.toHaveProperty('sets');
+    expect(calendar.body.days[1].sessions).toHaveLength(1);
+    expect(calendar.body.days[1].sessions[0]).toMatchObject({ setCount: 0, volumeKg: 0, cyclePhase: null });
   });
 });
