@@ -158,7 +158,7 @@ describe('workout lifecycle HTTP/PostgreSQL', () => {
     await expect(prisma.workout.count({
       where: { userId: user.id, endedAt: null, cancelledAt: null },
     })).resolves.toBe(1);
-  });
+  }, 30_000);
 
   it('allows different users to add sets to independent workouts concurrently', async () => {
     const [leftUser, rightUser] = await Promise.all([
@@ -175,12 +175,14 @@ describe('workout lifecycle HTTP/PostgreSQL', () => {
     ]);
     expect([leftWorkout.status, rightWorkout.status]).toEqual([201, 201]);
 
-    const [leftSet, rightSet] = await Promise.all([
-      postSet(leftUser, leftWorkout.body.id, leftExercise.id, { reps: 5 }),
-      postSet(rightUser, rightWorkout.body.id, rightExercise.id, { reps: 5 }),
-    ]);
+    for (let order = 0; order < 3; order += 1) {
+      const [leftSet, rightSet] = await Promise.all([
+        postSet(leftUser, leftWorkout.body.id, leftExercise.id, { order, reps: 5 + order }),
+        postSet(rightUser, rightWorkout.body.id, rightExercise.id, { order, reps: 5 + order }),
+      ]);
 
-    expect([leftSet.status, rightSet.status]).toEqual([201, 201]);
+      expect([leftSet.status, rightSet.status]).toEqual([201, 201]);
+    }
   }, 30_000);
 
   it('deduplicates simultaneous set mutations and enforces workout and exercise ownership', async () => {

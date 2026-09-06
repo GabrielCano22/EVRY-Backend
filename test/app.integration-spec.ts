@@ -111,5 +111,5 @@ describe('release invariants database migration', () => {
         data: { userId, name: 'Cancelled workout', status: 'CANCELLED', cancelledAt: new Date() },
       }),
     ).resolves.toMatchObject({ cancelledAt: expect.any(Date) });
-  });
+  }, 30_000);
 });

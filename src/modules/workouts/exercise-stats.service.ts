@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { lockWorkoutLifecycle } from './serializable-transaction';
+import { lockWorkoutLifecycle } from './workout-transaction';
 
 interface EligibleSet {
   id: string;

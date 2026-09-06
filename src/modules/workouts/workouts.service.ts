@@ -21,8 +21,8 @@ import {
 } from './servicio-sesion-activa';
 import {
   lockWorkoutLifecycle,
-  runSerializableTransaction,
-} from './serializable-transaction';
+  runWorkoutTransaction,
+} from './workout-transaction';
 
 function isSetMutationConflict(error: unknown): boolean {
   const targets = uniqueConflictTargets(error);
@@ -62,7 +62,7 @@ export class WorkoutsService {
   }
 
   update(userId: string, id: string, dto: UpdateWorkoutDto) {
-    return runSerializableTransaction(this.prisma, async (tx) => {
+    return runWorkoutTransaction(this.prisma, async (tx) => {
       await lockWorkoutLifecycle(tx, userId);
       const workout = this.requireOwnedWorkout(
         userId,
@@ -78,7 +78,7 @@ export class WorkoutsService {
   }
 
   finish(userId: string, id: string, dto: FinishWorkoutDto) {
-    return runSerializableTransaction(this.prisma, async (tx) => {
+    return runWorkoutTransaction(this.prisma, async (tx) => {
       await lockWorkoutLifecycle(tx, userId);
       const workout = this.requireOwnedWorkout(
         userId,
@@ -116,7 +116,7 @@ export class WorkoutsService {
   }
 
   cancel(userId: string, id: string) {
-    return runSerializableTransaction(this.prisma, async (tx) => {
+    return runWorkoutTransaction(this.prisma, async (tx) => {
       await lockWorkoutLifecycle(tx, userId);
       const workout = this.requireOwnedWorkout(
         userId,
@@ -139,7 +139,7 @@ export class WorkoutsService {
   }
 
   remove(userId: string, id: string) {
-    return runSerializableTransaction(this.prisma, async (tx) => {
+    return runWorkoutTransaction(this.prisma, async (tx) => {
       await lockWorkoutLifecycle(tx, userId);
       const workout = this.requireOwnedWorkout(
         userId,
@@ -161,7 +161,7 @@ export class WorkoutsService {
 
   async addSet(userId: string, workoutId: string, dto: CreateSetDto) {
     try {
-      return await runSerializableTransaction(this.prisma, async (tx) => {
+      return await runWorkoutTransaction(this.prisma, async (tx) => {
         await lockWorkoutLifecycle(tx, userId);
         const workout = this.requireOwnedWorkout(
           userId,
@@ -204,7 +204,7 @@ export class WorkoutsService {
   }
 
   updateSet(userId: string, setId: string, dto: UpdateSetDto) {
-    return runSerializableTransaction(this.prisma, async (tx) => {
+    return runWorkoutTransaction(this.prisma, async (tx) => {
       await lockWorkoutLifecycle(tx, userId);
       const set = await tx.workoutSet.findUnique({
         where: { id: setId },
@@ -222,7 +222,7 @@ export class WorkoutsService {
   }
 
   removeSet(userId: string, setId: string) {
-    return runSerializableTransaction(this.prisma, async (tx) => {
+    return runWorkoutTransaction(this.prisma, async (tx) => {
       await lockWorkoutLifecycle(tx, userId);
       const set = await tx.workoutSet.findUnique({
         where: { id: setId },

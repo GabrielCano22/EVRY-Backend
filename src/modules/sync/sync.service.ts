@@ -5,8 +5,8 @@ import { assertExercisesVisible } from '../exercises/exercise-visibility';
 import { ExerciseStatsService } from '../workouts/exercise-stats.service';
 import {
   lockWorkoutLifecycle,
-  runSerializableTransaction,
-} from '../workouts/serializable-transaction';
+  runWorkoutTransaction,
+} from '../workouts/workout-transaction';
 import { SyncWorkoutDto } from './dto/sync-workout.dto';
 import { RevisionConflictException } from './revision-conflict.exception';
 
@@ -39,7 +39,7 @@ export class SyncService {
       setIds.add(set.clientId);
       slots.add(slot);
     }
-    return runSerializableTransaction(this.prisma, async (tx) => {
+    return runWorkoutTransaction(this.prisma, async (tx) => {
       await lockWorkoutLifecycle(tx, userId);
 
       const replay = await tx.workout.findFirst({
