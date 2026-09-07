@@ -178,6 +178,33 @@ describe('authentication HTTP/PostgreSQL', () => {
     if (cleanupFailure) throw cleanupFailure;
   });
 
+  it('registers natively without cookies and rotates a mobile-only session', async () => {
+    const email = `${prefix}-native-register@example.test`;
+    const server = app.getHttpServer();
+    const registered = await request(server).post('/api/v1/auth/mobile/register')
+      .send({ email, password: PASSWORD, name: ' Native User ', biologicalSex: 'MALE', trackCycle: true })
+      .expect(201);
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    userIds.push(user.id);
+    expect(user).toMatchObject({ name: 'Native User', biologicalSex: 'MALE', trackCycle: true });
+    expect(registered.headers['set-cookie']).toBeUndefined();
+    expect(registered.body).toMatchObject({ accessToken: expect.any(String), refreshToken: expect.any(String) });
+    const stored = await prisma.refreshToken.findFirstOrThrow({ where: { userId: user.id } });
+    expect(stored.platform).toBe('MOBILE');
+    await request(server).get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${registered.body.accessToken}`).expect(200)
+      .expect(({ body }) => expect(body.id).toBe(user.id));
+    const rotated = await mobileRefresh(registered.body.refreshToken);
+    expect(rotated.status).toBe(200);
+    expect(rotated.body.refreshToken).not.toBe(registered.body.refreshToken);
+    await request(server).post('/api/v1/auth/mobile/logout')
+      .send({ refreshToken: rotated.body.refreshToken }).expect(200);
+    expect((await mobileRefresh(String(rotated.body.refreshToken))).status).toBe(401);
+    await request(server).post('/api/v1/auth/mobile/register')
+      .send({ email, password: PASSWORD, name: 'Duplicate' }).expect(409);
+    expect(await prisma.user.count({ where: { email } })).toBe(1);
+  });
+
   it('uses the production HTTP pipeline for versioning, strict browser origin and uniform errors', async () => {
     const server = app.getHttpServer();
     const email = `${prefix}-pipeline@example.test`;

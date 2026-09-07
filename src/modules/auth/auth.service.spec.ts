@@ -3,6 +3,29 @@ import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 
 describe('AuthService', () => {
+  it('registra una cuenta móvil con una familia de tokens MOBILE', async () => {
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'native-id', email: 'native@example.test' }),
+      },
+      refreshToken: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const jwt = { signAsync: jest.fn().mockResolvedValue('native-access') };
+    const config = {
+      getOrThrow: jest.fn().mockReturnValue('validated-secret'),
+      get: jest.fn().mockReturnValue('15m'),
+    };
+    const service = new AuthService(prisma as never, jwt as never, config as never);
+    const tokens = await service.register(
+      { email: 'native@example.test', name: 'Native', password: 'valid-password' }, 'MOBILE',
+    );
+    expect(tokens.accessToken).toBe('native-access');
+    expect(prisma.refreshToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 'native-id', platform: 'MOBILE' }),
+    });
+  });
+
   it('rechaza un refresh sin cookie sin provocar un error 500', async () => {
     const service = new AuthService({} as never, {} as never, {} as never);
 
