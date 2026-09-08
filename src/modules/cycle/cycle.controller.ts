@@ -16,6 +16,8 @@ export class CycleController {
 
   @Post('entries')
   @ApiResponse({ status: 201, description: 'Registro del ciclo creado o actualizado.', type: CycleEntryResponseDto })
+  @ApiResponse({ status: 409, description: 'La fecha de destino de un traslado ya está ocupada.', schema: { $ref: '#/components/schemas/ApiError' } })
+  @ApiResponse({ status: 404, description: 'El registro original del traslado ya no existe.', schema: { $ref: '#/components/schemas/ApiError' } })
   upsert(@CurrentUser() u: AuthUser, @Body() dto: UpsertCycleEntryDto) {
     return this.svc.upsertEntry(u.id, dto);
   }
