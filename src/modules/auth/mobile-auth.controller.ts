@@ -1,7 +1,8 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
-import { ApiBody, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiBody, ApiConflictResponse, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RateLimit } from '../../common/rate-limit/rate-limit.decorator';
 import { LogoutResponseDto, MobileTokensResponseDto } from './dto/auth-response.dto';
@@ -10,6 +11,16 @@ import { LogoutResponseDto, MobileTokensResponseDto } from './dto/auth-response.
 @Controller('auth/mobile')
 export class MobileAuthController {
   constructor(private readonly auth: AuthService) {}
+
+  @Post('register')
+  @ApiOperation({ operationId: 'mobileRegister', security: [] })
+  @ApiBody({ type: RegisterDto })
+  @ApiCreatedResponse({ type: MobileTokensResponseDto })
+  @ApiConflictResponse({ description: 'The email is already registered.', schema: { $ref: '#/components/schemas/ApiError' } })
+  @RateLimit(3)
+  register(@Body() dto: RegisterDto) {
+    return this.auth.register(dto, 'MOBILE');
+  }
 
   @Post('login')
   @ApiOperation({ operationId: 'mobileLogin', security: [] })

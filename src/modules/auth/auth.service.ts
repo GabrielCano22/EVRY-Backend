@@ -26,7 +26,7 @@ export class AuthService {
     private config: ConfigService,
   ) {}
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto, platform: RefreshTokenPlatform = 'WEB') {
     const email = dto.email.trim().toLowerCase();
     const name = dto.name.trim();
     const exists = await this.prisma.user.findUnique({ where: { email } });
@@ -42,7 +42,7 @@ export class AuthService {
         trackCycle: dto.trackCycle ?? false,
       },
     });
-    return this.issueTokens(user.id, user.email);
+    return this.issueTokens(user.id, user.email, platform);
   }
 
   async login(dto: LoginDto, platform: RefreshTokenPlatform = 'WEB') {

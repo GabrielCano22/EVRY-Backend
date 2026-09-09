@@ -8,9 +8,17 @@
     "npm": "11.x"
   },
   "overrides": {
+    "@eslint/eslintrc": {
+      "js-yaml": "4.3.2"
+    },
+    "@redocly/openapi-core": {
+      "js-yaml": "4.3.2"
+    },
     "browserslist": "4.28.8",
     "deepmerge-ts": "8.0.2",
-    "mysql2": "3.24.2"
+    "multer": "2.3.0",
+    "mysql2": "3.24.2",
+    "qs": "6.16.0"
   },
   "scripts": {
     "build": "nest build",

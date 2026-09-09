@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { CyclePhase, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpsertCycleEntryDto } from './dto/cycle.dto';
@@ -41,14 +41,20 @@ export class CycleService {
         update: { ...rest, date },
       });
 
-    // Mover un registro a otra fecha debe retirar el registro anterior para
-    // que el calendario no conserve síntomas o flujo obsoletos. La operación
-    // se mantiene atómica para evitar duplicados si el usuario pulsa guardar.
+    // A single UPDATE preserves the source identity and fields. The unique
+    // user/date constraint rejects occupied destinations, including concurrent moves.
     if (previousDate && previousDate.getTime() !== date.getTime()) {
-      return this.prisma.$transaction(async (tx) => {
-        await tx.cycleEntry.deleteMany({ where: { userId, date: previousDate } });
-        return guardar(tx);
-      });
+      try {
+        return await this.prisma.cycleEntry.update({
+          where: { userId_date: { userId, date: previousDate } },
+          data: { ...rest, date },
+        });
+      } catch (error) {
+        const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+        if (code === 'P2002') throw new ConflictException('Ya existe un registro en la fecha de destino.');
+        if (code === 'P2025') throw new NotFoundException('El registro original ya no existe. Actualiza la lista.');
+        throw error;
+      }
     }
 
     return guardar(this.prisma);

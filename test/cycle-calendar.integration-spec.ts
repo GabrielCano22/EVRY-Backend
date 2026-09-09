@@ -58,6 +58,29 @@ describe('cycle calendar HTTP/PostgreSQL', () => {
     }
   });
 
+  it('preserves both entries on collision and moves the original identity without recreating a missing source', async () => {
+    const user = await prisma.user.create({ data: {
+      email: `${prefix}-moves@example.test`, name: 'Move fixture', passwordHash: 'synthetic', trackCycle: true,
+    } });
+    users.push(user.id);
+    const original = await prisma.cycleEntry.create({ data: {
+      userId: user.id, date: new Date('2026-01-01'), flow: 'LIGHT', notes: 'Keep source', energy: 4,
+    } });
+    const target = await prisma.cycleEntry.create({ data: {
+      userId: user.id, date: new Date('2026-01-02'), flow: 'HEAVY', notes: 'Keep target',
+    } });
+    const token = new JwtService({ secret: process.env.JWT_ACCESS_SECRET }).sign({ sub: user.id });
+    const move = (date: string) => request(app.getHttpServer()).post('/api/v1/cycle/entries')
+      .set('Authorization', `Bearer ${token}`).send({ date, previousDate: '2026-01-01' });
+    await move('2026-01-02').expect(409);
+    expect(await prisma.cycleEntry.findUnique({ where: { id: original.id } })).toEqual(original);
+    expect(await prisma.cycleEntry.findUnique({ where: { id: target.id } })).toEqual(target);
+    const moved = await move('2026-01-03').expect(201);
+    expect(moved.body).toMatchObject({ id: original.id, date: '2026-01-03T00:00:00.000Z', flow: 'LIGHT', notes: 'Keep source', energy: 4 });
+    await move('2026-01-04').expect(404);
+    expect(await prisma.cycleEntry.count({ where: { userId: user.id } })).toBe(2);
+  });
+
   it('keeps an old seed beyond 180 newer records and includes only owned month-boundary labels', async () => {
     const cycle = await get('?from=2026-01-01&to=2026-01-31');
     expect(cycle.status).toBe(200);

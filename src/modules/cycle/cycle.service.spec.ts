@@ -2,13 +2,31 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CycleService } from './cycle.service';
 
 describe('CycleService', () => {
+  it.each([['P2002', 409], ['P2025', 404]] as const)('rechaza el traslado con %s sin borrar ni sobrescribir registros', async (code, status) => {
+    const cycleEntry = {
+      update: jest.fn().mockRejectedValue({ code }),
+      upsert: jest.fn().mockResolvedValue({ id: 'destino' }),
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+    };
+    const prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue({ trackCycle: true }) }, cycleEntry,
+      $transaction: jest.fn(async (callback: (tx: unknown) => unknown) => callback({ cycleEntry })),
+    } as unknown as PrismaService;
+    await expect(new CycleService(prisma).upsertEntry('usuario-1', {
+      date: '2026-08-20', previousDate: '2026-08-19', notes: 'Original',
+    })).rejects.toMatchObject({ status });
+    expect(cycleEntry.deleteMany).not.toHaveBeenCalled();
+    expect(cycleEntry.upsert).not.toHaveBeenCalled();
+  });
+
   it('mueve un registro al cambiar la fecha sin dejar la entrada anterior', async () => {
-    const upsert = jest.fn().mockResolvedValue({ id: 'nuevo' });
+    const upsert = jest.fn();
+    const update = jest.fn().mockResolvedValue({ id: 'original' });
     const deleteMany = jest.fn().mockResolvedValue({ count: 1 });
     const tx = { cycleEntry: { upsert, deleteMany } };
     const prisma = {
       user: { findUnique: jest.fn().mockResolvedValue({ trackCycle: true }) },
-      cycleEntry: { upsert: jest.fn(), deleteMany: jest.fn() },
+      cycleEntry: { upsert, update, deleteMany },
       $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaService;
     const service = new CycleService(prisma);
@@ -20,16 +38,12 @@ describe('CycleService', () => {
       isPeriodStart: false,
     });
 
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(deleteMany).toHaveBeenCalledWith({
-      where: { userId: 'usuario-1', date: new Date('2026-08-19') },
+    expect(deleteMany).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith({
+      where: { userId_date: { userId: 'usuario-1', date: new Date('2026-08-19') } },
+      data: { date: new Date('2026-08-20'), symptoms: ['fatiga'], isPeriodStart: false },
     });
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { userId_date: { userId: 'usuario-1', date: new Date('2026-08-20') } },
-        create: expect.objectContaining({ symptoms: ['fatiga'], isPeriodStart: false }),
-      }),
-    );
   });
 
   it('actualiza la misma fecha sin abrir una transacción de traslado', async () => {

@@ -30,6 +30,10 @@ describe('authentication rate limits', () => {
       .useValue({})
       .overrideProvider(AuthService)
       .useValue({
+        register: jest.fn().mockResolvedValue({
+          accessToken: 'native-access', refreshToken: 'native-refresh',
+          expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+        }),
         login: jest.fn().mockResolvedValue({
           accessToken: 'access-token',
           refreshToken: 'refresh-token',
@@ -70,6 +74,19 @@ describe('authentication rate limits', () => {
 
     expect(response.body).toMatchObject({ statusCode: 429 });
     expect(response.headers['retry-after']).toBeDefined();
+  });
+
+  it('limita el registro móvil sin requerir Origin ni emitir cookies', async () => {
+    const server = app.getHttpServer();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await request(server).post('/auth/mobile/register')
+        .send({ email: 'native@example.test', password: 'valid-password', name: 'Native' }).expect(201);
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expect(response.body.refreshToken).toBe('native-refresh');
+    }
+    const limited = await request(server).post('/auth/mobile/register')
+      .send({ email: 'native@example.test', password: 'valid-password', name: 'Native' }).expect(429);
+    expect(limited.headers['retry-after']).toBeDefined();
   });
 
   it('aplica el guard global a una ruta que no tiene un límite específico', async () => {
