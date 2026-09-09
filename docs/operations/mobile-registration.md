@@ -10,7 +10,7 @@ El cliente móvil debe almacenar el refresh token en SecureStore mediante el
 flujo de sesión existente y consultar `/users/me` antes de abrir datos de cuenta.
 El seguimiento del ciclo permanece voluntario e independiente del sexo.
 
-## Evidencia local del 7 de septiembre de 2026
+## Evidencia local del 8 de septiembre de 2026
 
 - La regresión del servicio falló primero porque emitía `WEB` al registrar una
   cuenta móvil. Tras la implementación, las dos suites focales aprobaron nueve
@@ -18,9 +18,9 @@ El seguimiento del ciclo permanece voluntario e independiente del sexo.
   intento. La prueba HTTP sustituye persistencia y servicio de autenticación;
   no demuestra persistencia real.
 - La comprobación de tipos, lint, build y generación OpenAPI terminaron correctamente.
-- Se añadió integración HTTP/PostgreSQL de registro, perfil autenticado,
-  plataforma persistida, rotación, logout y correo duplicado. Todavía no se ha
-  ejecutado: el entorno rechazó el comando de arranque del clúster de pruebas.
-- No se modificaron datos reales. No publicar este bloque como verificado hasta
-  ejecutar esa integración y las puertas restantes. La pantalla y el consumidor
-  móvil del nuevo contrato aún están pendientes.
+- La integración HTTP/PostgreSQL de registro, perfil autenticado, plataforma
+  persistida, rotación, logout y correo duplicado pasó dentro del foco conjunto
+  de autenticación y ciclo: 2 suites / 24 pruebas.
+- La suite completa pasó 8 suites / 78 pruebas sobre un clúster PostgreSQL 17.11
+  sintético creado desde cero y las ocho migraciones existentes. No se
+  modificaron datos reales.

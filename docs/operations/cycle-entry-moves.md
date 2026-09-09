@@ -12,15 +12,15 @@ El nuevo traslado es un único UPDATE, sin borrado ni upsert.
 
 ## Verificación local
 
-El 7 de septiembre de 2026 se reprodujo el conflicto omitido con una prueba que
+El 8 de septiembre de 2026 se reprodujo el conflicto omitido con una prueba que
 resolvía exitosamente en lugar de rechazar el traslado. Tras corregirlo pasaron
 siete pruebas focales y la comprobación de tipos, incluida la nueva integración.
 
-La integración añadida en `test/cycle-calendar.integration-spec.ts` comprueba
-colisión sin cambios en ambas filas, traslado conservando ID/campos y rechazo de
-origen ausente. No se ha ejecutado todavía contra PostgreSQL porque el entorno
-rechazó arrancar el clúster local de pruebas. Tampoco se ha medido una carrera
-con múltiples conexiones. Estos casos no se presentan como verificados.
+La integración añadida en `test/cycle-calendar.integration-spec.ts` comprobó
+contra PostgreSQL la colisión sin cambios en ambas filas, el traslado conservando
+ID/campos y el rechazo de un origen ausente. El foco conjunto de autenticación y
+ciclo pasó 2 suites / 24 pruebas y la suite completa pasó 8 suites / 78 pruebas.
+No se ha medido una carrera de este traslado con múltiples conexiones.
 
 Crear/actualizar un día sin traslado conserva el upsert existente. La prevención
 de sobrescritura aquí documentada corresponde al traslado entre fechas.

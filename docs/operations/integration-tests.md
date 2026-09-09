@@ -1,6 +1,6 @@
 # Integración local con PostgreSQL sintético
 
-Actualizado: 4 de septiembre de 2026.
+Actualizado: 8 de septiembre de 2026.
 
 Esta guía ejecuta las pruebas de integración contra un clúster PostgreSQL local **sintético y aislado**. Nunca copie una URL de producción ni reutilice la base de runtime. No incluye `prisma migrate reset`, `DROP DATABASE`, restauraciones ni semillas de datos reales.
 
@@ -78,6 +78,10 @@ La prueba focal comprueba 10 casos, incluidos idempotencia, carreras de entrega 
 
 ## Evidencia actual y límites
 
-El 4 de septiembre de 2026, la integración completa pasó 7 suites / 60 pruebas en 60,48 s contra PostgreSQL sintético. El foco de sync pasó 10/10 y una revisión independiente aprobó la identidad completa del advisory lock. La única salida adicional conocida fue la advertencia de Jest sobre VM Modules experimental.
+El 8 de septiembre de 2026, la ejecución final de integración pasó 8 suites / 78
+pruebas en 53,14 s contra un PostgreSQL 17.11 sintético inicializado desde cero. Antes se
+aplicaron correctamente las ocho migraciones existentes. El foco conjunto de
+autenticación y ciclo pasó 2 suites / 24 pruebas. La única salida adicional fue
+la advertencia de Jest sobre VM Modules experimental.
 
 No se ejecutó migración sobre base poblada, backup/restauración, restauración de datos ni pruebas de rendimiento. Detenga el clúster temporal con el comando anterior al finalizar, sin borrar sus archivos.

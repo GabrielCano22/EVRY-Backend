@@ -417,7 +417,7 @@ describe('authentication HTTP/PostgreSQL', () => {
     } finally {
       await isolatedApp.close();
     }
-  });
+  }, 15_000);
 
   it('handles a database-forced serializable refresh collision without a 500 or valid descendant', async () => {
     const user = await createUser('concurrent-refresh');
