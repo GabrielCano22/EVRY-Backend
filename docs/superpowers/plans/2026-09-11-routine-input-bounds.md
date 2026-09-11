@@ -37,4 +37,3 @@ Close the remaining routine DTO denial-of-service and contract gaps by enforcing
 - Focused DTO tests pass with pristine output.
 - `npm run test:unit`, `npm run lint`, `npm run test:type-check`, `npm run build`, `npm run prisma:validate`, `npm run prisma:generate`, and `npm run openapi:check` pass.
 - Work is self-reviewed and committed with `Feat: Se agrega "<acción realizada en este módulo>"`.
-
