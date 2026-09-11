@@ -28,6 +28,15 @@ it('describes routine lists and full nested exercise targets without untyped ite
     targetWeightKg: { type: 'number', nullable: true },
     exercise: { $ref: '#/components/schemas/ExerciseEntity' },
   } });
+  expect(doc.components?.schemas?.RoutineExerciseDto).toMatchObject({ properties: {
+    notes: { type: 'string', nullable: true, maxLength: 2000 },
+  } });
+  expect(doc.components?.schemas?.CreateRoutineDto).toMatchObject({ properties: {
+    notes: { type: 'string', nullable: true, maxLength: 2000 },
+  } });
+  expect(doc.components?.schemas?.UpdateRoutineDto).toMatchObject({ properties: {
+    notes: { type: 'string', nullable: true, maxLength: 2000 },
+  } });
   expect(doc.paths['/api/v1/routines'].post?.responses['201']).toMatchObject({ content: { 'application/json': { schema: { $ref: '#/components/schemas/Routine' } } } });
   expect(doc.paths['/api/v1/routines/{id}'].patch?.responses['200']).toMatchObject({ content: { 'application/json': { schema: { $ref: '#/components/schemas/Routine' } } } });
   expect(doc.paths['/api/v1/routines/{id}/start'].post?.responses['201']).toMatchObject({ content: { 'application/json': { schema: { $ref: '#/components/schemas/Workout' } } } });

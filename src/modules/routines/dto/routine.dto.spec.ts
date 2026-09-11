@@ -80,6 +80,12 @@ describe('RoutineExerciseDto', () => {
     expect(validateSync(dto)).toHaveLength(0);
   });
 
+  it('accepts null to clear exercise notes', () => {
+    const dto = plainToInstance(RoutineExerciseDto, validExercise({ notes: null }));
+
+    expect(validateSync(dto)).toHaveLength(0);
+  });
+
   it('rejects notes with 2,001 characters at the DTO boundary', () => {
     const dto = plainToInstance(RoutineExerciseDto, validExercise({ notes: 'n'.repeat(2001) }));
 
@@ -116,6 +122,16 @@ describe('CreateRoutineDto', () => {
     const dto = plainToInstance(CreateRoutineDto, {
       name: 'routine',
       notes: 'n'.repeat(2000),
+      exercises: [validExercise()],
+    });
+
+    expect(validateSync(dto)).toHaveLength(0);
+  });
+
+  it('accepts null routine notes', () => {
+    const dto = plainToInstance(CreateRoutineDto, {
+      name: 'routine',
+      notes: null,
       exercises: [validExercise()],
     });
 
@@ -174,6 +190,12 @@ describe('UpdateRoutineDto', () => {
 
   it('accepts optional notes with 2,000 characters', () => {
     const dto = plainToInstance(UpdateRoutineDto, { notes: 'n'.repeat(2000) });
+
+    expect(validateSync(dto)).toHaveLength(0);
+  });
+
+  it('accepts null to clear routine notes', () => {
+    const dto = plainToInstance(UpdateRoutineDto, { notes: null });
 
     expect(validateSync(dto)).toHaveLength(0);
   });

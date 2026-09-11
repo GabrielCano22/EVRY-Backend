@@ -1,4 +1,5 @@
 import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMaxSize,
   IsArray,
@@ -30,13 +31,16 @@ export class RoutineExerciseDto {
   @ValidateNested({ each: true })
   @Type(() => RoutineSeriesPlanDto)
   seriesPlan?: RoutineSeriesPlanDto[];
-  @IsOptional() @IsString() @MaxLength(2000) notes?: string;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000 })
+  @IsOptional() @IsString() @MaxLength(2000) notes?: string | null;
 }
 
 export class CreateRoutineDto {
   @IsString() @MinLength(1) @MaxLength(120) name!: string;
   @IsOptional() @IsInt() @Min(0) @Max(6) dayOfWeek?: number;
-  @IsOptional() @IsString() @MaxLength(2000) notes?: string;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000 })
+  @IsOptional() @IsString() @MaxLength(2000) notes?: string | null;
+  @ApiProperty({ type: () => [RoutineExerciseDto], maxItems: 100 })
   @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => RoutineExerciseDto)
   exercises!: RoutineExerciseDto[];
 }
@@ -44,7 +48,9 @@ export class CreateRoutineDto {
 export class UpdateRoutineDto {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(120) name?: string;
   @IsOptional() @IsInt() @Min(0) @Max(6) dayOfWeek?: number | null;
-  @IsOptional() @IsString() @MaxLength(2000) notes?: string;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000 })
+  @IsOptional() @IsString() @MaxLength(2000) notes?: string | null;
+  @ApiPropertyOptional({ type: () => [RoutineExerciseDto], maxItems: 100 })
   @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => RoutineExerciseDto)
   exercises?: RoutineExerciseDto[];
 }
