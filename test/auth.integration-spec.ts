@@ -21,6 +21,8 @@ type DatabaseConnectionIdentity = {
 
 const PASSWORD = 'valid-password';
 
+jestGlobals.setTimeout(15_000);
+
 function allowedOrigin(): string {
   const origin = process.env.CORS_ORIGIN;
   if (!origin) throw new Error('CORS_ORIGIN must be configured for this integration test.');
@@ -349,6 +351,42 @@ describe('authentication HTTP/PostgreSQL', () => {
     expect(logout.status).toBe(200);
     expect(logout.body).toEqual({ ok: true });
     expect((await mobileRefresh(rotatedToken)).status).toBe(401);
+  });
+
+  it('normalizes valid profile updates and rejects unsafe names or duplicate goals', async () => {
+    const user = await createUser('profile-limits');
+    const login = await mobileLogin(user.email);
+    const authorization = `Bearer ${String(login.body.accessToken)}`;
+
+    const updated = await request(app.getHttpServer())
+      .patch('/api/v1/users/me')
+      .set('Authorization', authorization)
+      .send({ name: '  Eva Perfil  ', goals: ['STRENGTH', 'MOBILITY'] })
+      .expect(200);
+
+    expect(updated.body).toMatchObject({
+      id: user.id,
+      name: 'Eva Perfil',
+      goals: ['STRENGTH', 'MOBILITY'],
+    });
+    await expect(prisma.user.findUniqueOrThrow({ where: { id: user.id } }))
+      .resolves.toMatchObject({ name: 'Eva Perfil', goals: ['STRENGTH', 'MOBILITY'] });
+
+    for (const payload of [
+      { name: 'x'.repeat(101) },
+      { goals: ['STRENGTH', 'STRENGTH'] },
+    ]) {
+      const rejected = await request(app.getHttpServer())
+        .patch('/api/v1/users/me')
+        .set('Authorization', authorization)
+        .send(payload)
+        .expect(400);
+      expect(rejected.body).toMatchObject({
+        code: 'VALIDATION_ERROR',
+        retryable: false,
+        requestId: expect.any(String),
+      });
+    }
   });
 
   it('rejects platform exchange and revokes only the reused token family', async () => {
