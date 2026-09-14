@@ -20,6 +20,16 @@ describe('cycle calendar HTTP/PostgreSQL', () => {
     return request(app.getHttpServer()).get(`/api/v1/cycle/calendar${query}`).set('Authorization', `Bearer ${token}`);
   }
 
+  function getEntries(query = '', actor = owner) {
+    const token = new JwtService({ secret: process.env.JWT_ACCESS_SECRET }).sign({ sub: actor });
+    return request(app.getHttpServer()).get(`/api/v1/cycle/entries${query}`).set('Authorization', `Bearer ${token}`);
+  }
+
+  function getToday(actor = owner) {
+    const token = new JwtService({ secret: process.env.JWT_ACCESS_SECRET }).sign({ sub: actor });
+    return request(app.getHttpServer()).get('/api/v1/cycle/today').set('Authorization', `Bearer ${token}`);
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication({ logger: false });
@@ -103,6 +113,18 @@ describe('cycle calendar HTTP/PostgreSQL', () => {
     expect(afterFuture.body).toMatchObject({ entries: [], previousPeriodStart: '2026-02-01' });
     const beforeHistory = await get('?from=2025-01-01&to=2025-01-31');
     expect(beforeHistory.body).toMatchObject({ entries: [], previousPeriodStart: null });
+  });
+
+  it('excludes future legacy records from the journal and current phase estimate', async () => {
+    const entries = await getEntries();
+    expect(entries.status).toBe(200);
+    expect(entries.body.some((entry: { date: string }) => entry.date.startsWith('2099-'))).toBe(false);
+
+    const today = await getToday();
+    expect(today.status).toBe(200);
+    expect(today.body).not.toBeNull();
+    expect(today.body.dayOfCycle).toBeGreaterThanOrEqual(1);
+    expect(today.body.nextPeriodStart).not.toBe('2099-01-29');
   });
 
   it('requires authentication and explicit opt-in regardless of sex', async () => {

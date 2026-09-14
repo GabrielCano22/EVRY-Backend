@@ -72,7 +72,7 @@ export class CycleService {
         userId,
         date: {
           gte: fromLabel ? this.databaseDate(fromLabel) : undefined,
-          lte: to ? this.databaseDate(toLabel) : undefined,
+          lte: this.databaseDate(toLabel),
         },
       },
       orderBy: { date: 'desc' },
@@ -123,8 +123,13 @@ export class CycleService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.trackCycle) return null;
 
+    const today = todayCivilDate();
     const lastStarts = await this.prisma.cycleEntry.findMany({
-      where: { userId, isPeriodStart: true },
+      where: {
+        userId,
+        isPeriodStart: true,
+        date: { lte: this.databaseDate(today) },
+      },
       orderBy: { date: 'desc' },
       take: 6,
     });
@@ -132,7 +137,6 @@ export class CycleService {
 
     const cycleLen = this.computeCycleLength(lastStarts.map((e) => e.date), user.avgCycleLen);
     const lastStart = this.databaseDateLabel(lastStarts[0].date);
-    const today = todayCivilDate();
     const day = this.dayDifference(lastStart, today) + 1;
     const dayOfCycle = ((day - 1) % cycleLen) + 1;
 
