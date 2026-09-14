@@ -173,24 +173,26 @@ it('publishes real login, registration and mobile refresh validation constraints
   });
 });
 
-it('describes all profile update inputs without adding constraints absent from validation', () => {
+it('describes all profile update inputs with the validation constraints', () => {
   expect(document.paths['/api/v1/users/me'].patch!.requestBody).toMatchObject({
     required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/UserUpdateInput' } } },
   });
   const input = schema('UserUpdateInput');
   expect(input.required ?? []).toEqual([]);
   expect(input.properties).toMatchObject({
-    name: { type: 'string' },
+    name: { type: 'string', minLength: 2, maxLength: 100 },
     biologicalSex: { type: 'string', enum: ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_SAY'] },
     birthDate: { type: 'string', nullable: true },
-    goals: { type: 'array', items: { type: 'string', enum: ['STRENGTH', 'HYPERTROPHY', 'ENDURANCE', 'FAT_LOSS', 'GENERAL_FITNESS', 'MOBILITY'] } },
+    goals: {
+      type: 'array',
+      uniqueItems: true,
+      maxItems: 6,
+      items: { type: 'string', enum: ['STRENGTH', 'HYPERTROPHY', 'ENDURANCE', 'FAT_LOSS', 'GENERAL_FITNESS', 'MOBILITY'] },
+    },
     trackCycle: { type: 'boolean' },
     avgCycleLen: { type: 'integer', minimum: 20, maximum: 45 },
     avgPeriodLen: { type: 'integer', minimum: 2, maximum: 10 },
   });
-  expect(input.properties!.name).not.toHaveProperty('minLength');
-  expect(input.properties!.name).not.toHaveProperty('maxLength');
-  expect(input.properties!.goals).not.toHaveProperty('maxItems');
   // @IsDateString accepts both ISO calendar dates and date-times, not only one format.
   expect(input.properties!.birthDate).not.toHaveProperty('format');
 });

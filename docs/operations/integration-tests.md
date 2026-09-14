@@ -1,6 +1,6 @@
 # Integración local con PostgreSQL sintético
 
-Actualizado: 8 de septiembre de 2026.
+Actualizado: 13 de septiembre de 2026.
 
 Esta guía ejecuta las pruebas de integración contra un clúster PostgreSQL local **sintético y aislado**. Nunca copie una URL de producción ni reutilice la base de runtime. No incluye `prisma migrate reset`, `DROP DATABASE`, restauraciones ni semillas de datos reales.
 
@@ -85,3 +85,5 @@ autenticación y ciclo pasó 2 suites / 24 pruebas. La única salida adicional f
 la advertencia de Jest sobre VM Modules experimental.
 
 No se ejecutó migración sobre base poblada, backup/restauración, restauración de datos ni pruebas de rendimiento. Detenga el clúster temporal con el comando anterior al finalizar, sin borrar sus archivos.
+
+El 13 de septiembre de 2026, la suite completa pasó 8 suites / 79 pruebas en 103,19 s sobre el mismo clúster sintético limpio. La regresión nueva verifica por HTTP y PostgreSQL que la edición del perfil normaliza nombres válidos y rechaza nombres excesivos o metas duplicadas con el error uniforme; las pruebas unitarias pasaron 54 suites / 342 casos. El clúster se detuvo al terminar y no se accedió a datos reales.
