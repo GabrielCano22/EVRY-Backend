@@ -10,11 +10,14 @@ Copie `.env.example` a `.env` y complete valores propios; no publique ese archiv
 DATABASE_URL=postgresql://usuario:contrasena@host:puerto/base?schema=public
 JWT_ACCESS_SECRET=<secreto-unico-de-al-menos-32-caracteres>
 JWT_REFRESH_SECRET=<otro-secreto-unico-de-al-menos-32-caracteres>
+JWT_ACCESS_TTL=15m
+JWT_REFRESH_TTL=30d
 PORT=4000
+CORS_ORIGIN=http://localhost:3000
 SWAGGER_ENABLED=false
 ```
 
-Los secretos de acceso y refresh deben ser distintos, tener al menos 32 caracteres y no ser valores de ejemplo. Swagger es opt-in: solo se publica en `/docs` si `SWAGGER_ENABLED=true`. `CORS_ORIGIN`, `MEDIA_BASE_URL`, `JWT_ACCESS_TTL` y `JWT_REFRESH_TTL` son opciones adicionales de despliegue.
+Los secretos de acceso y refresh deben ser distintos, tener al menos 32 caracteres y no ser valores de ejemplo. El TTL de acceso es obligatorio, admite `s`, `m` o `h` y debe estar entre 60 segundos y una hora. El TTL de refresh también es obligatorio, admite únicamente días enteros (`d`) y debe estar entre 1 y 90 días. Swagger es opt-in: solo se publica en `/docs` si `SWAGGER_ENABLED=true`. `MEDIA_BASE_URL` es una opción adicional de despliegue.
 
 ## Instalación y scripts
 
@@ -52,6 +55,8 @@ PORT=4000
 SWAGGER_ENABLED=false
 JWT_ACCESS_SECRET=<secreto-de-prueba-de-32-o-mas-caracteres>
 JWT_REFRESH_SECRET=<otro-secreto-de-prueba-distinto-de-32-o-mas-caracteres>
+JWT_ACCESS_TTL=15m
+JWT_REFRESH_TTL=30d
 ```
 
 ## Autenticación y límites
@@ -62,7 +67,7 @@ Las rutas de registro, inicio de sesión y refresh usan límites específicos de
 
 Los filtros de Prisma normalizan conflictos, referencias, ausencias y problemas de conexión sin exponer SQL ni mensajes internos. Un problema de conexión responde como servicio no disponible, reintentable y con `Retry-After`.
 
-El proceso se niega a iniciar si faltan la URL PostgreSQL, los dos secretos distintos, `PORT`, `SWAGGER_ENABLED` o `CORS_ORIGIN`. Prisma 7 usa `prisma.config.ts` para migraciones y el adaptador PostgreSQL en runtime.
+El proceso se niega a iniciar si faltan la URL PostgreSQL, los dos secretos distintos, ambos TTL, `PORT`, `SWAGGER_ENABLED` o `CORS_ORIGIN`. Prisma 7 usa `prisma.config.ts` para migraciones y el adaptador PostgreSQL en runtime.
 
 ## CI y política de despliegue
 

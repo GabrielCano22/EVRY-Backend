@@ -5,6 +5,8 @@ const validEnvironment = () => ({
   DATABASE_URL: 'postgresql://evry:password@localhost:5432/evry?schema=public',
   JWT_ACCESS_SECRET: randomBytes(32).toString('hex'),
   JWT_REFRESH_SECRET: randomBytes(32).toString('hex'),
+  JWT_ACCESS_TTL: '15m',
+  JWT_REFRESH_TTL: '30d',
   PORT: '4000',
   CORS_ORIGIN: 'http://localhost:3000',
   SWAGGER_ENABLED: 'false',
@@ -16,6 +18,58 @@ describe('validateEnvironment', () => {
     delete environment.JWT_ACCESS_SECRET;
 
     expect(() => validateEnvironment(environment)).toThrow('JWT_ACCESS_SECRET');
+  });
+
+  it.each(['JWT_ACCESS_TTL', 'JWT_REFRESH_TTL'])(
+    'rechaza una configuración sin %s',
+    (key) => {
+      const environment: Record<string, unknown> = validEnvironment();
+      delete environment[key];
+
+      expect(() => validateEnvironment(environment)).toThrow(key);
+    },
+  );
+
+  it.each([
+    ['vacío', ''],
+    ['menor de un minuto', '59s'],
+    ['cero', '0m'],
+    ['mayor de una hora', '61m'],
+    ['unidad no permitida', '1d'],
+    ['formato ambiguo', '15minutes'],
+  ])('rechaza JWT_ACCESS_TTL %s', (_description, value) => {
+    expect(() =>
+      validateEnvironment({ ...validEnvironment(), JWT_ACCESS_TTL: value }),
+    ).toThrow('JWT_ACCESS_TTL');
+  });
+
+  it.each([
+    ['vacío', ''],
+    ['cero', '0d'],
+    ['mayor de noventa días', '91d'],
+    ['unidad no permitida', '12h'],
+    ['formato ambiguo', '30days'],
+  ])('rechaza JWT_REFRESH_TTL %s', (_description, value) => {
+    expect(() =>
+      validateEnvironment({ ...validEnvironment(), JWT_REFRESH_TTL: value }),
+    ).toThrow('JWT_REFRESH_TTL');
+  });
+
+  it.each([
+    ['60s', '1d'],
+    ['1m', '30d'],
+    ['1h', '90d'],
+  ])('acepta TTL seguros de acceso %s y refresh %s', (accessTtl, refreshTtl) => {
+    const config = validateEnvironment({
+      ...validEnvironment(),
+      JWT_ACCESS_TTL: ` ${accessTtl} `,
+      JWT_REFRESH_TTL: ` ${refreshTtl} `,
+    });
+
+    expect(config).toMatchObject({
+      JWT_ACCESS_TTL: accessTtl,
+      JWT_REFRESH_TTL: refreshTtl,
+    });
   });
 
   it('rechaza una configuración sin orígenes CORS explícitos', () => {
