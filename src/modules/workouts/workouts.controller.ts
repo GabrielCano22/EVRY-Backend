@@ -1,10 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiCreatedResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiCreatedResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { WorkoutsService } from './workouts.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { CreateSetDto, CreateWorkoutDto, FinishWorkoutDto, UpdateSetDto, UpdateWorkoutDto } from './dto/workout.dto';
 import { WorkoutDto, WorkoutSetDto } from './dto/workout-response.dto';
+import { ListWorkoutsQueryDto } from './dto/list-workouts-query.dto';
 
 @ApiTags('workouts')
 @ApiBearerAuth()
@@ -21,11 +22,9 @@ export class WorkoutsController {
   }
 
   @Get()
-  @ApiQuery({ name: 'take', required: false, schema: { type: 'integer', default: 20 } })
-  @ApiQuery({ name: 'skip', required: false, schema: { type: 'integer', default: 0 } })
   @ApiOkResponse({ type: [WorkoutDto] })
-  list(@CurrentUser() u: AuthUser, @Query('take') take?: string, @Query('skip') skip?: string) {
-    return this.svc.list(u.id, take ? Number(take) : 20, skip ? Number(skip) : 0);
+  list(@CurrentUser() u: AuthUser, @Query() query: ListWorkoutsQueryDto) {
+    return this.svc.list(u.id, query.take, query.skip);
   }
 
   @Get(':id')

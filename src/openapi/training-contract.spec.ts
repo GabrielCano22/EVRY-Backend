@@ -113,8 +113,8 @@ it('describes workout mutations and pagination with their actual validation cons
   } });
   expect(schema('UpdateSetInput').properties?.isWarmup).not.toHaveProperty('nullable', true);
   expect(document.paths['/api/v1/workouts'].get?.parameters).toEqual(expect.arrayContaining([
-    expect.objectContaining({ name: 'take', in: 'query', required: false, schema: expect.objectContaining({ type: 'integer', default: 20 }) }),
-    expect.objectContaining({ name: 'skip', in: 'query', required: false, schema: expect.objectContaining({ type: 'integer', default: 0 }) }),
+    expect.objectContaining({ name: 'take', in: 'query', required: false, schema: expect.objectContaining({ type: 'integer', minimum: 1, maximum: 100, default: 20 }) }),
+    expect.objectContaining({ name: 'skip', in: 'query', required: false, schema: expect.objectContaining({ type: 'integer', minimum: 0, maximum: 10000, default: 0 }) }),
   ]));
   for (const path of ['/api/v1/workouts/{id}', '/api/v1/workouts/sets/{setId}']) {
     expect(document.paths[path].delete?.responses['200']).toMatchObject({ content: {
