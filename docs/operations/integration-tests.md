@@ -95,3 +95,10 @@ El 14 de septiembre de 2026, la suite completa pasó 8 suites / 80 pruebas en
 ciclo excluyen registros futuros heredados. También pasaron las 54 suites / 342
 pruebas unitarias, validación y generación de Prisma, contrato OpenAPI, lint,
 tipos, build y auditoría sin vulnerabilidades.
+
+El 21 de septiembre de 2026 se inicializó desde cero otro clúster portátil de
+PostgreSQL 17.11, separado de los clústeres anteriores y enlazado únicamente a
+`127.0.0.1:55438`. Las ocho migraciones se aplicaron sin reiniciar la base y la
+suite completa pasó 8 suites / 80 pruebas. La misma revisión pasó además 55
+suites / 369 pruebas unitarias, Prisma, OpenAPI, lint, tipos, build y auditoría
+sin vulnerabilidades; las CI de push y del PR `#10` finalizaron correctamente.
