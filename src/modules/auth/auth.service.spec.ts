@@ -2,7 +2,57 @@ import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
 
+const validatedAuthConfig = () => {
+  const values: Record<string, string> = {
+    JWT_ACCESS_SECRET: 'validated-secret',
+    JWT_ACCESS_TTL: '15m',
+    JWT_REFRESH_TTL: '30d',
+  };
+
+  return {
+    getOrThrow: (key: string) => {
+      const value = values[key];
+      if (value === undefined) throw new Error(`${key} is unavailable`);
+      return value;
+    },
+  };
+};
+
 describe('AuthService', () => {
+  it.each(['JWT_ACCESS_TTL', 'JWT_REFRESH_TTL'])(
+    'rechaza emitir tokens si %s deja de estar disponible',
+    async (missingKey) => {
+      const prisma = {
+        user: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ id: 'user-id', email: 'user@example.test' }),
+        },
+        refreshToken: { create: jest.fn().mockResolvedValue({}) },
+      };
+      const jwt = { signAsync: jest.fn().mockResolvedValue('access-token') };
+      const values: Record<string, string> = {
+        JWT_ACCESS_SECRET: 'validated-secret',
+        JWT_ACCESS_TTL: '15m',
+        JWT_REFRESH_TTL: '30d',
+      };
+      delete values[missingKey];
+      const config = {
+        getOrThrow: (key: string) => {
+          const value = values[key];
+          if (value === undefined) throw new Error(`${key} is unavailable`);
+          return value;
+        },
+      };
+      const service = new AuthService(prisma as never, jwt as never, config as never);
+
+      await expect(service.register({
+        email: 'user@example.test',
+        name: 'User',
+        password: 'valid-password',
+      })).rejects.toThrow(missingKey);
+    },
+  );
+
   it('registra una cuenta móvil con una familia de tokens MOBILE', async () => {
     const prisma = {
       user: {
@@ -12,10 +62,7 @@ describe('AuthService', () => {
       refreshToken: { create: jest.fn().mockResolvedValue({}) },
     };
     const jwt = { signAsync: jest.fn().mockResolvedValue('native-access') };
-    const config = {
-      getOrThrow: jest.fn().mockReturnValue('validated-secret'),
-      get: jest.fn().mockReturnValue('15m'),
-    };
+    const config = validatedAuthConfig();
     const service = new AuthService(prisma as never, jwt as never, config as never);
     const tokens = await service.register(
       { email: 'native@example.test', name: 'Native', password: 'valid-password' }, 'MOBILE',
@@ -77,10 +124,7 @@ describe('AuthService', () => {
       refreshToken: { create: jest.fn().mockResolvedValue({}) },
     };
     const jwt = { signAsync: jest.fn().mockResolvedValue('access-token') };
-    const config = {
-      getOrThrow: jest.fn().mockReturnValue('validated-secret'),
-      get: jest.fn().mockReturnValue('15m'),
-    };
+    const config = validatedAuthConfig();
     const service = new AuthService(prisma as never, jwt as never, config as never);
 
     const tokens = await service.login({ email: 'user@example.com', password: 'valid-password' });

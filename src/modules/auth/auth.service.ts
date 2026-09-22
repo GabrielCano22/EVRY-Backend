@@ -128,16 +128,16 @@ export class AuthService {
       { sub: userId, email },
       {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
-        expiresIn: (this.config.get<string>('JWT_ACCESS_TTL') ?? '15m') as JwtSignOptions['expiresIn'],
+        expiresIn: this.config.getOrThrow<string>(
+          'JWT_ACCESS_TTL',
+        ) as JwtSignOptions['expiresIn'],
       },
     );
 
     const refreshToken = randomBytes(48).toString('hex');
     const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
-    const ttlDays = parseInt(
-      (this.config.get<string>('JWT_REFRESH_TTL') ?? '30d').replace('d', ''),
-      10,
-    ) || 30;
+    const refreshTtl = this.config.getOrThrow<string>('JWT_REFRESH_TTL');
+    const ttlDays = Number(refreshTtl.slice(0, -1));
     const expiresAt = new Date(Date.now() + ttlDays * 86400_000);
 
     await db.refreshToken.create({

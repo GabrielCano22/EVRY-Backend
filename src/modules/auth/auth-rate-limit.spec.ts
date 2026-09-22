@@ -12,6 +12,8 @@ describe('authentication rate limits', () => {
     NODE_ENV: 'test',
     JWT_ACCESS_SECRET: `evry-test-${randomBytes(32).toString('hex')}`,
     JWT_REFRESH_SECRET: `evry-test-${randomBytes(32).toString('hex')}`,
+    JWT_ACCESS_TTL: '15m',
+    JWT_REFRESH_TTL: '30d',
     PORT: '4000',
     CORS_ORIGIN: 'http://localhost:3000',
     SWAGGER_ENABLED: 'false',
