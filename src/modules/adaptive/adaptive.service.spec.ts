@@ -73,4 +73,46 @@ describe('AdaptiveService', () => {
       targetWeightKg: 50,
     });
   });
+
+  it('no descarga por una única sesión difícil si la anterior no tuvo RPE alto', async () => {
+    const prisma = {
+      workoutSet: {
+        findMany: jest.fn().mockResolvedValue([
+          set({ rpe: 9 }),
+          set({ workoutId: 'workout-2', workout: { id: 'workout-2' }, rpe: 7 }),
+        ]),
+      },
+    };
+    const service = new AdaptiveService(
+      prisma as never,
+      { phaseInfo: jest.fn().mockResolvedValue(null) } as never,
+      { latest: jest.fn().mockResolvedValue({ score: 80 }) } as never,
+    );
+
+    await expect(service.recommend('user-1', 'exercise-1')).resolves.toMatchObject({
+      action: 'HOLD',
+      targetWeightKg: 50,
+    });
+  });
+
+  it('descarga tras dos sesiones difíciles consecutivas sin mejorar la carga', async () => {
+    const prisma = {
+      workoutSet: {
+        findMany: jest.fn().mockResolvedValue([
+          set({ rpe: 9 }),
+          set({ workoutId: 'workout-2', workout: { id: 'workout-2' }, rpe: 9 }),
+        ]),
+      },
+    };
+    const service = new AdaptiveService(
+      prisma as never,
+      { phaseInfo: jest.fn().mockResolvedValue(null) } as never,
+      { latest: jest.fn().mockResolvedValue({ score: 80 }) } as never,
+    );
+
+    await expect(service.recommend('user-1', 'exercise-1')).resolves.toMatchObject({
+      action: 'DELOAD',
+      targetWeightKg: 45,
+    });
+  });
 });

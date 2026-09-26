@@ -95,7 +95,9 @@ export class AdaptiveService {
       rationale.push(`Última sesión RPE ${lastRpe} ≤ 8, completaste ${lastReps} repeticiones. Sube ${inc} kg.`);
     } else if (prev) {
       const prevTopWeight = Math.max(...prev.map((s) => s.weightKg ?? 0));
-      const stalled = lastTopWeight <= prevTopWeight && lastRpe >= 9;
+      const prevTopSet = prev.find((s) => (s.weightKg ?? 0) === prevTopWeight)!;
+      const prevRpe = prevTopSet.rpe ?? 8;
+      const stalled = lastTopWeight <= prevTopWeight && lastRpe >= 9 && prevRpe >= 9;
       if (stalled) {
         targetWeight = Math.round(lastTopWeight * 0.9 * 2) / 2;
         action = 'DELOAD';
