@@ -25,6 +25,9 @@ describe('AdaptiveService', () => {
       targetWeightKg: null,
       targetReps: null,
     });
+    expect(prisma.workoutSet.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ weightKg: { gt: 0 }, reps: { gt: 0 } }),
+    }));
   });
 
   it('progresa tras dos sesiones comparables y readiness actual no bajo, sin multiplicar por ciclo', async () => {
@@ -50,6 +53,55 @@ describe('AdaptiveService', () => {
       action: 'PROGRESS',
       targetWeightKg: 51,
       targetReps: 8,
+    });
+  });
+
+  it.each([
+    [45, 7, 50, 8],
+    [50, 7, 50, 8],
+  ])('no progresa cuando la sesión reciente retrocede: %i kg y %i reps', async (
+    lastWeight, lastReps, previousWeight, previousReps,
+  ) => {
+    const prisma = {
+      workoutSet: {
+        findMany: jest.fn().mockResolvedValue([
+          set({ weightKg: lastWeight, reps: lastReps }),
+          set({ workoutId: 'workout-2', workout: { id: 'workout-2' }, weightKg: previousWeight, reps: previousReps }),
+        ]),
+      },
+    };
+    const service = new AdaptiveService(
+      prisma as never,
+      { phaseInfo: jest.fn().mockResolvedValue(null) } as never,
+      { latest: jest.fn().mockResolvedValue({ score: 80 }) } as never,
+    );
+
+    await expect(service.recommend('user-1', 'exercise-1')).resolves.toMatchObject({
+      action: 'HOLD',
+      targetWeightKg: lastWeight,
+      targetReps: lastReps,
+    });
+  });
+
+  it('no propone una carga con series de peso cero', async () => {
+    const prisma = {
+      workoutSet: {
+        findMany: jest.fn().mockResolvedValue([
+          set({ weightKg: 0 }),
+          set({ workoutId: 'workout-2', workout: { id: 'workout-2' }, weightKg: 0 }),
+        ]),
+      },
+    };
+    const service = new AdaptiveService(
+      prisma as never,
+      { phaseInfo: jest.fn().mockResolvedValue(null) } as never,
+      { latest: jest.fn().mockResolvedValue({ score: 80 }) } as never,
+    );
+
+    await expect(service.recommend('user-1', 'exercise-1')).resolves.toMatchObject({
+      action: 'HOLD',
+      targetWeightKg: null,
+      targetReps: null,
     });
   });
 

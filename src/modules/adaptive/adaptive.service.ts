@@ -26,15 +26,19 @@ export class AdaptiveService {
         exerciseId,
         isWarmup: false,
         workout: { userId, status: 'COMPLETED' },
-        weightKg: { not: null },
-        reps: { not: null },
+        weightKg: { gt: 0 },
+        reps: { gt: 0 },
       },
       orderBy: { completedAt: 'desc' },
       take: 30,
       include: { workout: true },
     });
 
-    if (recentSets.length === 0) {
+    const eligibleSets = recentSets.filter((set) =>
+      set.weightKg !== null && set.weightKg > 0 && set.reps !== null && set.reps > 0,
+    );
+
+    if (eligibleSets.length === 0) {
       return {
         exerciseId,
         targetWeightKg: null,
@@ -46,8 +50,8 @@ export class AdaptiveService {
     }
 
     // group by workout, take 2 most recent sessions
-    const byWorkout = new Map<string, typeof recentSets>();
-    for (const s of recentSets) {
+    const byWorkout = new Map<string, typeof eligibleSets>();
+    for (const s of eligibleSets) {
       const arr = byWorkout.get(s.workoutId) ?? [];
       arr.push(s);
       byWorkout.set(s.workoutId, arr);
@@ -75,6 +79,9 @@ export class AdaptiveService {
     const lastTopSet = last.find((s) => (s.weightKg ?? 0) === lastTopWeight)!;
     const lastReps = lastTopSet.reps ?? 0;
     const lastRpe = lastTopSet.rpe ?? 8;
+    const prevTopWeight = Math.max(...prev.map((s) => s.weightKg ?? 0));
+    const prevTopSet = prev.find((s) => (s.weightKg ?? 0) === prevTopWeight)!;
+    const prevReps = prevTopSet.reps ?? 0;
 
     const rationale: string[] = [];
     let action: Recommendation['action'] = 'HOLD';
@@ -88,14 +95,12 @@ export class AdaptiveService {
     }
 
     // Progression rule
-    if (lastRpe <= 8 && lastReps >= targetReps) {
+    if (lastRpe <= 8 && lastTopWeight >= prevTopWeight && lastReps >= prevReps) {
       const inc = lastTopWeight >= 60 ? 2.5 : 1.0;
       targetWeight = Math.round((lastTopWeight + inc) * 2) / 2;
       action = 'PROGRESS';
       rationale.push(`Última sesión RPE ${lastRpe} ≤ 8, completaste ${lastReps} repeticiones. Sube ${inc} kg.`);
     } else if (prev) {
-      const prevTopWeight = Math.max(...prev.map((s) => s.weightKg ?? 0));
-      const prevTopSet = prev.find((s) => (s.weightKg ?? 0) === prevTopWeight)!;
       const prevRpe = prevTopSet.rpe ?? 8;
       const stalled = lastTopWeight <= prevTopWeight && lastRpe >= 9 && prevRpe >= 9;
       if (stalled) {
