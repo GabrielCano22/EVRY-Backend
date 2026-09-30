@@ -122,3 +122,28 @@ Las regresiones verifican registro, login y refresh contra el guard real, ademá
 de la conservación del header y el respaldo en errores de servicio.
 La verificación final pasó 376 unitarias y 83 pruebas de integración, lint,
 tipos, build, Prisma, OpenAPI sin diferencias y auditoría sin vulnerabilidades.
+
+### Ensayo poblado y recuperación, 30 de septiembre
+
+La nueva puerta `npm run test:migration`, documentada en
+[migration-runbook.md](migration-runbook.md), pasó ocho casos contra PostgreSQL
+17.11 local. Aplicó el baseline histórico y las ocho migraciones publicadas,
+conservó las 34 filas fuente y contrastó las estadísticas reconstruidas con
+valores calculados independientemente. Restauró los dumps anterior y posterior
+en bases nuevas y comprobó idempotencia y reversión ante tres clases de
+duplicados heredados. La suite HTTP completa pasó también 9 suites / 83 pruebas
+contra la copia poblada restaurada, sin modificar sus fixtures originales.
+
+El guard local y la construcción de comandos tienen 16 regresiones. La
+revisión independiente detectó que Docker podía heredar variables libpq del
+contenedor; el comando ahora ejecuta los binarios con `env -i`, conexión
+explícita y sin `PGHOSTADDR`/servicios heredados. La regresión falló antes del
+cambio y pasó después. Las unitarias completas pasaron 56 suites / 392 pruebas;
+Prisma, lint, tipos, build, OpenAPI y auditoría también terminaron correctamente.
+
+Las bases UUID y dumps sintéticos se conservan en el clúster/local worktree;
+no se borró ni sobrescribió ninguna base. Esto cierra el ensayo automatizado
+sintético, no una migración o restauración de datos reales. El cierre de
+conexiones si falla la escritura del inventario de artefactos queda como mejora
+menor de manejo de fallos del harness, no como aceptación de recuperación de
+infraestructura o de volúmenes grandes.

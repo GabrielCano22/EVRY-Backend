@@ -51,4 +51,17 @@ jobs:
       - run: npm run test:unit
       - run: npm run test:db:migrate
       - run: npm run test:integration
+      - name: Populated migration and backup recovery rehearsal
+        run: npm run test:migration
+        env:
+          EVRY_PG_TOOLS_CONTAINER: ${{ job.services.postgres.id }}
+      - name: Preserve synthetic migration recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-migration-rehearsal
+          path: .worktrees/migration-rehearsal-*/
+          if-no-files-found: ignore
+          include-hidden-files: true
+          retention-days: 7
       - run: npm audit --audit-level=high
