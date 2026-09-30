@@ -30,7 +30,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const response = context.getResponse<Response>();
     const normalized = this.normalize(exception);
 
-    if (normalized.retryable) response.setHeader('Retry-After', '5');
+    if (normalized.retryable && response.getHeader('Retry-After') === undefined) {
+      response.setHeader('Retry-After', '5');
+    }
     const { status, ...payload } = normalized;
     response.status(status).json({
       ...payload,

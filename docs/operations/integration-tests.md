@@ -113,3 +113,12 @@ La integración completa pasó 9 suites / 83 pruebas; también pasaron las 374
 unitarias, lint, tipos, build y OpenAPI sin diferencias. La auditoría no reportó
 vulnerabilidades. La base fue exclusivamente sintética; no se migraron ni
 restauraron datos reales.
+
+El recorrido completo posterior detectó que el filtro uniforme sobrescribía el
+`Retry-After` del limitador con cinco segundos. La regresión HTTP reprodujo un
+plazo requerido de al menos 57 segundos anunciado como 5. El filtro ahora
+conserva el plazo calculado y sólo añade el respaldo de 5 cuando falta.
+Las regresiones verifican registro, login y refresh contra el guard real, además
+de la conservación del header y el respaldo en errores de servicio.
+La verificación final pasó 376 unitarias y 83 pruebas de integración, lint,
+tipos, build, Prisma, OpenAPI sin diferencias y auditoría sin vulnerabilidades.
