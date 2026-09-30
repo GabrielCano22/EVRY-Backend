@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiExtraModels, ApiParam, ApiQuery, ApiResponse, ApiTags, getSchemaPath } from '@nestjs/swagger';
 import { CycleService } from './cycle.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -6,6 +6,7 @@ import { CurrentUser, AuthUser } from '../../common/decorators/current-user.deco
 import { UpsertCycleEntryDto } from './dto/cycle.dto';
 import { CycleCalendarResponseDto, CycleEntryResponseDto, CyclePhaseInfoDto, DeleteCycleEntryResultDto } from './dto/cycle-response.dto';
 import { CycleCalendarQueryDto } from './dto/cycle-calendar-query.dto';
+import { NullableJsonInterceptor } from '../../common/http/nullable-json.interceptor';
 
 @ApiTags('cycle')
 @ApiExtraModels(CyclePhaseInfoDto)
@@ -31,6 +32,7 @@ export class CycleController {
   }
 
   @Get('today')
+  @UseInterceptors(NullableJsonInterceptor)
   @ApiResponse({
     status: 200,
     description: 'Contexto estimado del ciclo, o null si no hay seguimiento voluntario o inicios registrados.',

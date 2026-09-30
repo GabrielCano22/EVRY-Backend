@@ -630,6 +630,7 @@ describe('authentication HTTP/PostgreSQL', () => {
     const server = isolatedApp.getHttpServer();
 
     try {
+      const registerStartedAt = Date.now();
       for (let index = 0; index < 3; index += 1) {
         const email = `${prefix}-rate-register-${index}@example.test`;
         const response = await request(server)
@@ -650,6 +651,7 @@ describe('authentication HTTP/PostgreSQL', () => {
         });
       expect(registerLimited.status).toBe(429);
 
+      const loginStartedAt = Date.now();
       for (let index = 0; index < 5; index += 1) {
         const response = await request(server)
           .post('/api/v1/auth/login')
@@ -664,6 +666,7 @@ describe('authentication HTTP/PostgreSQL', () => {
       expect(loginLimited.status).toBe(429);
 
       const unknownRefresh = 'a'.repeat(96);
+      const refreshStartedAt = Date.now();
       for (let index = 0; index < 10; index += 1) {
         const response = await request(server)
           .post('/api/v1/auth/refresh')
@@ -679,14 +682,18 @@ describe('authentication HTTP/PostgreSQL', () => {
         .send({});
       expect(refreshLimited.status).toBe(429);
 
-      for (const limited of [registerLimited, loginLimited, refreshLimited]) {
+      for (const [limited, startedAt] of [
+        [registerLimited, registerStartedAt], [loginLimited, loginStartedAt], [refreshLimited, refreshStartedAt],
+      ] as const) {
         expect(limited.body).toEqual({
           code: 'RATE_LIMITED',
           message: 'Demasiadas solicitudes. Inténtalo más tarde.',
           retryable: true,
           requestId: expect.any(String),
         });
-        expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+        const retryAfter = Number(limited.headers['retry-after']);
+        expect(retryAfter).toBeGreaterThanOrEqual(Math.ceil((startedAt + 60_000 - Date.now()) / 1000));
+        expect(retryAfter).toBeLessThanOrEqual(60);
       }
     } finally {
       if (createdIds.length > 0) {

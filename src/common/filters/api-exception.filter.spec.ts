@@ -1,4 +1,4 @@
-import { BadRequestException, HttpStatus } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ApiExceptionFilter } from './api-exception.filter';
 import { RevisionConflictException } from '../../modules/sync/revision-conflict.exception';
@@ -7,6 +7,7 @@ function responseHost(requestId = '0c73ce04-63c5-49df-9464-31d88a476e20') {
   const response = {
     json: jest.fn(),
     setHeader: jest.fn(),
+    getHeader: jest.fn(),
     status: jest.fn().mockReturnThis(),
   };
   const request = { requestId };
@@ -20,6 +21,21 @@ function responseHost(requestId = '0c73ce04-63c5-49df-9464-31d88a476e20') {
 }
 
 describe('ApiExceptionFilter', () => {
+  it('preserva el Retry-After calculado por el limitador', () => {
+    const { host, response } = responseHost();
+    response.getHeader.mockReturnValue('37');
+    new ApiExceptionFilter().catch(new HttpException('Demasiadas solicitudes', HttpStatus.TOO_MANY_REQUESTS), host);
+    expect(response.getHeader).toHaveBeenCalledWith('Retry-After');
+    expect(response.setHeader).not.toHaveBeenCalled();
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'RATE_LIMITED', retryable: true }));
+  });
+
+  it('añade un plazo de recuperación por defecto sólo cuando no hay uno', () => {
+    const { host, response } = responseHost();
+    new ApiExceptionFilter().catch(new ServiceUnavailableException(), host);
+    expect(response.setHeader).toHaveBeenCalledWith('Retry-After', '5');
+  });
+
   it('normaliza errores de validación por campo', () => {
     const { host, response } = responseHost();
     const exception = new BadRequestException({

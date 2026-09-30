@@ -102,3 +102,23 @@ PostgreSQL 17.11, separado de los clústeres anteriores y enlazado únicamente a
 suite completa pasó 8 suites / 80 pruebas. La misma revisión pasó además 55
 suites / 369 pruebas unitarias, Prisma, OpenAPI, lint, tipos, build y auditoría
 sin vulnerabilidades; las CI de push y del PR `#10` finalizaron correctamente.
+
+El 30 de septiembre de 2026, una regresión HTTP reprodujo respuestas vacías en
+`/readiness/latest` y `/cycle/today` cuando los servicios devolvían `null`. El
+contrato promete JSON `null`, necesario para los clientes generados. Un
+interceptor limitado a esas rutas conserva el literal y su Content-Type sin
+modificar objetos, autenticación ni errores. La nueva suite pasó 3/3 e incluye
+un upsert diario con revisión del ID, fecha civil, puntuación y conteo.
+La integración completa pasó 9 suites / 83 pruebas; también pasaron las 374
+unitarias, lint, tipos, build y OpenAPI sin diferencias. La auditoría no reportó
+vulnerabilidades. La base fue exclusivamente sintética; no se migraron ni
+restauraron datos reales.
+
+El recorrido completo posterior detectó que el filtro uniforme sobrescribía el
+`Retry-After` del limitador con cinco segundos. La regresión HTTP reprodujo un
+plazo requerido de al menos 57 segundos anunciado como 5. El filtro ahora
+conserva el plazo calculado y sólo añade el respaldo de 5 cuando falta.
+Las regresiones verifican registro, login y refresh contra el guard real, además
+de la conservación del header y el respaldo en errores de servicio.
+La verificación final pasó 376 unitarias y 83 pruebas de integración, lint,
+tipos, build, Prisma, OpenAPI sin diferencias y auditoría sin vulnerabilidades.

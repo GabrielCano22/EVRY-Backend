@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiExtraModels, ApiResponse, ApiTags, getSchemaPath } from '@nestjs/swagger';
 import { ReadinessService } from './readiness.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser, AuthUser } from '../../common/decorators/current-user.decorator';
 import { CheckinReadinessDto, ReadinessResponseDto } from './dto/readiness.dto';
+import { NullableJsonInterceptor } from '../../common/http/nullable-json.interceptor';
 
 @ApiTags('readiness')
 @ApiExtraModels(ReadinessResponseDto)
@@ -19,6 +20,7 @@ export class ReadinessController {
   }
 
   @Get('latest')
+  @UseInterceptors(NullableJsonInterceptor)
   @ApiResponse({
     status: 200,
     description: 'Estado de la fecha civil de hoy, o null si todavía no se registró.',
