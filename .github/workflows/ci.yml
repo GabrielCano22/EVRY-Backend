@@ -64,4 +64,15 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
           retention-days: 7
+      - name: Compiled API hot performance with synthetic PostgreSQL
+        run: npm run test:performance
+      - name: Preserve synthetic API performance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-api-performance
+          path: .worktrees/api-performance-*/report.json
+          if-no-files-found: ignore
+          include-hidden-files: true
+          retention-days: 7
       - run: npm audit --audit-level=high
