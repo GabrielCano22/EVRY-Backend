@@ -180,6 +180,44 @@ describe('authentication HTTP/PostgreSQL', () => {
     if (cleanupFailure) throw cleanupFailure;
   });
 
+  it('rejects decoded JSON cookies through HTTP without revoking another session', async () => {
+    const isolated = await createIntegrationApp();
+    try {
+      await isolated.listen(0, '127.0.0.1');
+      const user = await createUser('invalid-json-cookie');
+      const login = await mobileLogin(user.email);
+      expect(login.status).toBe(200);
+      const tokenHash = sha256(login.body.refreshToken as string);
+      const original = await prisma.refreshToken.findUniqueOrThrow({ where: { tokenHash } });
+      const malformedCookies = [
+        'j:{"token":"fixture"}', 'j:["fixture"]', 'j:42', 'j:true', 'j:{"trim":"not-a-function"}',
+      ];
+      for (const operation of ['refresh', 'logout']) {
+        for (const cookie of malformedCookies) {
+          const response = await request(isolated.getHttpServer())
+            .post(`/api/v1/auth/${operation}`)
+            .set('Origin', allowedOrigin())
+            .set('Cookie', `evry_refresh=${encodeURIComponent(cookie)}`)
+            .expect(401);
+          expect(response.body).toEqual({
+            code: 'UNAUTHORIZED',
+            message: 'El token de sesión no es válido o ya expiró.',
+            retryable: false,
+            requestId: expect.any(String),
+          });
+          if (operation === 'logout') {
+            expect(firstSetCookie(response)).toContain('evry_refresh=;');
+            expect(firstSetCookie(response)).toContain('Path=/api');
+            expect(firstSetCookie(response)).toContain('HttpOnly');
+          }
+        }
+      }
+      await expect(prisma.refreshToken.findUniqueOrThrow({ where: { tokenHash } })).resolves.toEqual(original);
+    } finally {
+      await isolated.close();
+    }
+  });
+
   it('registers natively without cookies and rotates a mobile-only session', async () => {
     const email = `${prefix}-native-register@example.test`;
     const server = app.getHttpServer();
