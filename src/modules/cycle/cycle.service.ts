@@ -28,10 +28,10 @@ export class CycleService {
     const { date: dateStr, previousDate: previousDateStr, ...rest } = dto;
     const today = todayCivilDate(undefined, now);
     const dateLabel = this.civilDate(dateStr);
-    assertCivilDateRange(dateLabel, dateLabel, today);
+    this.assertDateRange(dateLabel, dateLabel, today);
     const date = this.databaseDate(dateLabel);
     const previousDateLabel = previousDateStr ? this.civilDate(previousDateStr) : null;
-    if (previousDateLabel) assertCivilDateRange(previousDateLabel, previousDateLabel, today);
+    if (previousDateLabel) this.assertDateRange(previousDateLabel, previousDateLabel, today);
     const previousDate = previousDateLabel ? this.databaseDate(previousDateLabel) : null;
 
     const guardar = (client: Pick<PrismaService, 'cycleEntry'>) =>
@@ -65,8 +65,8 @@ export class CycleService {
     const today = todayCivilDate(undefined, now);
     const fromLabel = from ? this.civilDate(from) : undefined;
     const toLabel = to ? this.civilDate(to) : today;
-    if (fromLabel) assertCivilDateRange(fromLabel, toLabel, today);
-    else assertCivilDateRange(toLabel, toLabel, today);
+    if (fromLabel) this.assertDateRange(fromLabel, toLabel, today);
+    else this.assertDateRange(toLabel, toLabel, today);
     return this.prisma.cycleEntry.findMany({
       where: {
         userId,
@@ -203,8 +203,22 @@ export class CycleService {
   }
 
   private civilDate(value: string): CivilDate {
-    parseCivilDate(value);
+    try {
+      parseCivilDate(value);
+    } catch (error) {
+      if (error instanceof RangeError) throw new BadRequestException(error.message);
+      throw error;
+    }
     return value as CivilDate;
+  }
+
+  private assertDateRange(from: CivilDate, to: CivilDate, today: CivilDate): void {
+    try {
+      assertCivilDateRange(from, to, today);
+    } catch (error) {
+      if (error instanceof RangeError) throw new BadRequestException(error.message);
+      throw error;
+    }
   }
 
   private databaseDate(value: CivilDate): Date {
