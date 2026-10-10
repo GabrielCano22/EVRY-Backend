@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync, fork, type ChildProcess } from 'node:child_process';
+import { execFileSync, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { arch, cpus, platform, release, totalmem } from 'node:os';
@@ -8,34 +8,13 @@ import { hash } from 'bcrypt';
 import { Client } from 'pg';
 import { assertLocalMigrationDatabase } from '../test/helpers/migration-rehearsal';
 import { measureScenario, type ScenarioOptions } from '../test/helpers/api-benchmark';
-import { closeBenchmarkServer } from '../test/helpers/benchmark-process';
+import { BenchmarkStartupError, closeBenchmarkServer, startBenchmarkServer, type BenchmarkStartupEvent } from '../test/helpers/benchmark-process';
 import type { ExercisePageDto } from '../src/modules/exercises/dto/exercise-page.dto';
 import type { ProgressOverviewDto, ExerciseProgressDto } from '../src/modules/progress/dto/progress-response.dto';
 
 const root = process.cwd();
 const email = 'synthetic-performance@example.test';
 const password = randomUUID();
-
-async function startServer(databaseUrl: string, deadline: number): Promise<{ child: ChildProcess; baseUrl: string }> {
-  if (performance.now() >= deadline) throw new Error('Benchmark overall deadline exhausted');
-  const child = fork(join(root, 'scripts/benchmark-api-server.cjs'), [], {
-    cwd: root, execArgv: [], stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-    env: { ...process.env, DATABASE_URL: databaseUrl },
-  });
-  try {
-    const baseUrl = await new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Benchmark application startup timeout')), Math.min(30_000, deadline - performance.now()));
-      const exit = () => { clearTimeout(timer); reject(new Error('Benchmark application exited during startup')); };
-      child.once('exit', exit);
-      child.once('error', (error) => { clearTimeout(timer); reject(error); });
-      child.once('message', (message: { ready?: string; error?: string }) => {
-        clearTimeout(timer); child.removeListener('exit', exit);
-        if (message.ready) resolve(message.ready); else reject(new Error('Benchmark application initialization failed'));
-      });
-    });
-    return { child, baseUrl };
-  } catch (error) { await closeBenchmarkServer(child); throw error; }
-}
 
 async function main() {
   // Compliant warmed workloads can require ~788s plus migration/startup.
@@ -50,6 +29,8 @@ async function main() {
   let server: ChildProcess | undefined;
   const results: Array<ReturnType<typeof measureScenario> extends Promise<infer T> ? T & { name: string; repetition: number } : never> = [];
   const errors: string[] = [];
+  const startupTraces: Array<{ concurrency: number; repetition: number; events: BenchmarkStartupEvent[] }> = [];
+  let startupFailure: { code: string; closedCleanly: boolean; childExitCode: number | null; events: BenchmarkStartupEvent[] } | null = null;
   let closedServers = 0;
   let directory: string | undefined;
   let stage = 'safe fixture initialization';
@@ -87,7 +68,11 @@ async function main() {
 
     for (const concurrency of [1, 4]) for (let repetition = 1; repetition <= 3; repetition++) {
       stage = `application startup c${concurrency} r${repetition}`;
-      const started = await startServer(target.href, deadline); server = started.child;
+      const events: BenchmarkStartupEvent[] = [];
+      startupTraces.push({ concurrency, repetition, events });
+      const started = await startBenchmarkServer({ root, databaseUrl: target.href, deadline,
+        onPhase: (event) => events.push(event) });
+      server = started.child;
       try {
         stage = `mobile login c${concurrency} r${repetition}`;
         const login = await fetch(`${started.baseUrl}/api/v1/auth/mobile/login`, {
@@ -135,7 +120,12 @@ async function main() {
       (SELECT count(*)::int FROM "WorkoutSet") sets`);
     assert.deepEqual(final.rows[0], { readiness: 1, sets: 10000 });
   } catch (error) {
-    errors.push(`Benchmark failed during ${stage} (${error instanceof Error ? error.name : 'unknown error'}); do not certify this run.`);
+    if (error instanceof BenchmarkStartupError) {
+      startupFailure = { code: error.code, closedCleanly: error.closedCleanly,
+        childExitCode: error.childExitCode, events: error.events };
+    }
+    const failure = error instanceof BenchmarkStartupError ? error.code : error instanceof Error ? error.name : 'unknown error';
+    errors.push(`Benchmark failed during ${stage} (${failure}); do not certify this run.`);
   } finally {
     // Closing resources precedes report IO; a full disk must not leave servers running.
     if (server) { try { await closeBenchmarkServer(server); closedServers++; } catch { errors.push('Application cleanup failed'); } }
@@ -152,7 +142,7 @@ async function main() {
     fixtureDatabase: database, fixture: { exercises: 2648, workouts: 1000, sets: 10000 },
     scope: 'Warm local synthetic application; not deployed API, cold start, Web Vitals or Android release acceptance.',
     assumptions: 'One-sided binomial order-statistic confidence bound assumes independent stationary observations. Shared resources/concurrency may violate assumptions. Each process repetition reported separately; no samples pooled. Rate limits remain enabled.',
-    errors, closedServers, results,
+    errors, startupTraces, startupFailure, closedServers, results,
   }, null, 2));
   process.stdout.write(JSON.stringify({ report: relative(root, reportPath) }) + '\n');
   if (errors.length || results.length !== 30 || results.some((result) => !result.acceptedWith95Confidence)) process.exitCode = 1;

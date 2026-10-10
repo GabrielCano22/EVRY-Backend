@@ -1,5 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import cookieParser from 'cookie-parser';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 
 const validatedAuthConfig = () => {
@@ -18,7 +20,33 @@ const validatedAuthConfig = () => {
   };
 };
 
+function decodedRefreshCookie(value: string): unknown {
+  const request = { headers: { cookie: `evry_refresh=${encodeURIComponent(value)}` } } as Request;
+  cookieParser()(request, {} as Response, () => undefined);
+  return request.cookies.evry_refresh;
+}
+
 describe('AuthService', () => {
+  describe.each(['refresh', 'logout'] as const)('%s cookie input boundary', (method) => {
+    it.each([
+    'j:{"token":"fixture"}',
+    'j:["fixture"]',
+    'j:42',
+    'j:true',
+    'j:{"trim":"not-a-function"}',
+    ])('rejects a non-string cookie decoded by actual middleware without an internal error: %s', async (cookie) => {
+      const decoded = decodedRefreshCookie(cookie);
+      const service = new AuthService({} as never, {} as never, {} as never);
+      await expect(service[method](decoded as never)).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
+  it('preserves idempotent logout for an ordinary unknown cookie string', async () => {
+    const prisma = { refreshToken: { findUnique: jest.fn().mockResolvedValue(null) } };
+    const service = new AuthService(prisma as never, {} as never, {} as never);
+    await expect(service.logout(decodedRefreshCookie('a'.repeat(96)) as never)).resolves.toEqual({ ok: true });
+  });
+
   it.each(['JWT_ACCESS_TTL', 'JWT_REFRESH_TTL'])(
     'rechaza emitir tokens si %s deja de estar disponible',
     async (missingKey) => {
