@@ -1,7 +1,52 @@
 # Rendimiento de la API: ensayo local reproducible
 
-Estado: ensayo local verificado y revisado. El resultado de publicación/CI se
-consulta en GitHub; no es evidencia de aceptación desplegada.
+Estado: la última puerta local pasa sus 30 grupos, pero se conservan dos
+ensayos adversos cuyas causas no están confirmadas. El resultado de
+publicación/CI se consulta en GitHub; no es evidencia de aceptación desplegada.
+
+## Diagnóstico y fallos posteriores — 9 de octubre de 2026
+
+Se conservan ambos reportes adversos: `api-performance-qnOE6N` completa 30
+grupos y cierra seis servidores, pero dos cotas superiores de confianza superan
+500 ms; `api-performance-Clc3y4` termina durante el primer arranque, sin muestras.
+Ninguno permite certificar el estado actual por sí solo. Los controles posteriores
+de arranque/SQL no sustituyen el benchmark ni explican retrospectivamente esos fallos.
+
+Una única ejecución completa con el diagnóstico nuevo termina con salida 0:
+`api-performance-424bUg/report.json`, 30/30 grupos aceptados, seis servidores
+cerrados, seis trazas completas y ningún error. Se mantuvieron todas las muestras,
+repeticiones y límites. La mayor cota superior es 496,170 ms en historial c4/r2
+frente a 500 ms: el margen es pequeño. Los ready observados tardan 4377–6276 ms,
+fuera de las muestras calientes. No hubo cambio de implementación de latencia;
+este resultado no prueba una corrección causal de los outliers ni invalida los
+reportes adversos. No equivale a aceptación web, móvil o API desplegada.
+
+La verificación completa posterior al parche compatible de Handlebars y a una
+instalación limpia también pasa: `api-performance-2nSDTv/report.json`, 30/30
+grupos, seis cierres, seis trazas y cero errores. La mayor cota es 361,436 ms,
+conservando los límites originales. Este ensayo pertenece a la cadena local de
+CI del lock actualizado; no es resultado de CI remota para el futuro commit.
+Ambos reportes adversos anteriores siguen preservados y sin causa confirmada.
+
+El runner ahora recoge `startupTraces` por proceso y `startupFailure` cuando
+corresponde. Solo conserva fases permitidas, deduplicadas y tiempos del reloj
+del padre. Clasifica deadline agotado, timeout, salida anterior a ready,
+rechazo de inicialización y fallo de creación del proceso con códigos fijos.
+También registra si la limpieza cerró correctamente y el código de salida;
+no reemplaza la causa original por un error secundario de cleanup. Nunca añade
+mensajes de excepción, stacks, tokens ni el contenido bruto de IPC al reporte.
+
+El worker envía fases de importación, creación de aplicación y escucha solo
+cuando el starter del benchmark activa `EVRY_BENCHMARK_STARTUP_TRACE=true` en
+ese hijo. No debe configurarse globalmente: otros consumidores, incluido el
+runner móvil, conservan ready como primer mensaje. Mensajes desconocidos o de
+fase no cancelan ni renuevan el watchdog. Se conservan startup 30 s, cleanup
+10 s/5 s, calentamiento 20, muestras 80 y todos los presupuestos de aceptación.
+Las trazas de arranque quedan fuera de la latencia caliente.
+
+La compilación debe terminar antes de abrir cualquier worker dependiente de
+`dist`: un ensayo local reprodujo `MODULE_NOT_FOUND` por construir y arrancar
+simultáneamente. Ese fallo de preparación se conserva y no se atribuye a la app.
 
 Especificación: presupuestos del plan integral EVRY: API caliente p95 <500 ms
 en consultas y <300 ms en mutaciones simples. No incluye despertar gratuito,
