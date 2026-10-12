@@ -10,23 +10,18 @@ import type { Request, Response } from 'express';
 import {
   RATE_LIMIT_METADATA,
   type RateLimitOptions,
+  SKIP_RATE_LIMIT_METADATA,
 } from './rate-limit.decorator';
-
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
+import { RateLimitStore, type RateLimitResult } from './rate-limit.store';
 
 const DEFAULT_RATE_LIMIT: RateLimitOptions = { limit: 100, ttlMs: 60_000 };
-const MAX_TRACKED_KEYS = 10_000;
 
 @Injectable()
 export class RateLimitGuard implements CanActivate {
-  private readonly entries = new Map<string, RateLimitEntry>();
+  constructor(private readonly reflector: Reflector, private readonly store: RateLimitStore) {}
 
-  constructor(private readonly reflector: Reflector) {}
-
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    if (this.reflector.getAllAndOverride<boolean>(SKIP_RATE_LIMIT_METADATA, [context.getHandler(), context.getClass()])) return true;
     const options = this.reflector.getAllAndOverride<RateLimitOptions>(RATE_LIMIT_METADATA, [
       context.getHandler(),
       context.getClass(),
@@ -34,40 +29,26 @@ export class RateLimitGuard implements CanActivate {
     const http = context.switchToHttp();
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
-    const now = Date.now();
-    const key = [
+    const identity = JSON.stringify([
       request.ip || request.socket.remoteAddress || 'unknown',
       context.getClass().name,
       context.getHandler().name,
-    ].join(':');
-    const existing = this.entries.get(key);
-    const entry = !existing || existing.resetAt <= now
-      ? { count: 0, resetAt: now + options.ttlMs }
-      : existing;
-
-    if (entry.count >= options.limit) {
-      response.setHeader('Retry-After', String(Math.max(1, Math.ceil((entry.resetAt - now) / 1000))));
+    ]);
+    let result: RateLimitResult;
+    try {
+      result = await this.store.consume(identity, options);
+    } catch {
+      // Never fall back to a fresh local quota when shared protection is unavailable.
+      throw new HttpException('No pudimos verificar el límite de solicitudes. Inténtalo más tarde.', HttpStatus.SERVICE_UNAVAILABLE);
+    }
+    if (!result.allowed) {
+      response.setHeader('Retry-After', String(result.retryAfter));
       throw new HttpException(
         'Demasiadas solicitudes. Inténtalo más tarde.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
-    entry.count += 1;
-    this.entries.set(key, entry);
-    this.prune(now);
     return true;
-  }
-
-  private prune(now: number): void {
-    if (this.entries.size <= MAX_TRACKED_KEYS) return;
-    for (const [key, entry] of this.entries) {
-      if (entry.resetAt <= now) this.entries.delete(key);
-    }
-    while (this.entries.size > MAX_TRACKED_KEYS) {
-      const oldestKey = this.entries.keys().next().value as string | undefined;
-      if (!oldestKey) break;
-      this.entries.delete(oldestKey);
-    }
   }
 }

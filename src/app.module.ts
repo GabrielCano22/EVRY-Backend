@@ -15,6 +15,7 @@ import { validateEnvironment } from './config/environment';
 import { HealthModule } from './health/health.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
+import { RateLimitStore } from './common/rate-limit/rate-limit.store';
 
 @Module({
   imports: [
@@ -32,6 +33,6 @@ import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
     HealthModule,
     SyncModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: RateLimitGuard }],
+  providers: [RateLimitStore, { provide: APP_GUARD, useClass: RateLimitGuard }],
 })
 export class AppModule {}

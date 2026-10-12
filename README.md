@@ -61,7 +61,7 @@ JWT_REFRESH_TTL=30d
 
 ## Autenticación y límites
 
-Las rutas de registro, inicio de sesión y refresh usan límites específicos de 3, 5 y 10 solicitudes por minuto; el límite global es 100 por minuto. El refresh se almacena en una cookie `httpOnly`, `sameSite=lax`, con ruta `/api/auth` y `secure` en producción. Login normaliza el correo y responde de forma uniforme ante credenciales no válidas. La validación global elimina propiedades no permitidas y las rechaza.
+Las rutas de registro, inicio de sesión y refresh usan límites específicos de 3, 5 y 10 solicitudes por minuto; el guard global limita cada ruta sin anotación a 100 por minuto. Las cuotas se comparten mediante PostgreSQL, no se reinician al crear otra instancia y fallan cerrado si el almacén no está disponible. `/health/live` permanece independiente de esa consulta. El refresh se almacena en una cookie `httpOnly`, `sameSite=lax`, con ruta `/api` y `secure` en producción. Login normaliza el correo y responde de forma uniforme ante credenciales no válidas. La validación global elimina propiedades no permitidas y las rechaza. Consulte [límites compartidos](docs/operations/shared-rate-limits.md) para la expansión y verificación pendientes.
 
 ## Errores y datos
 
@@ -72,6 +72,10 @@ El proceso se niega a iniciar si faltan la URL PostgreSQL, los dos secretos dist
 ## CI y política de despliegue
 
 `.github/workflows/ci.yml` levanta PostgreSQL 17 aislado y ejecuta validate/generate, lint, build, pruebas unitarias, migraciones e integración. EVRY no se despliega ni crea infraestructura externa sin autorización explícita del propietario. Render y Cloudflare no forman parte de la arquitectura aprobada; si más adelante se autoriza un despliegue, web, API y servicios administrados se configurarán desde Vercel. Consulte `docs/operations/migration-runbook.md` antes de tocar datos conservados.
+
+La [preparación local de Vercel](docs/operations/vercel-staging.md) identifica
+configuración, protección de cookies y puertas pendientes. No es un despliegue
+ni una certificación de compatibilidad con la plataforma.
 
 La migración `20260819090000_release_invariants` es expandible: añade campos nullable a sesiones y series, emite un reporte agregado de sesiones activas duplicadas, conserva la más reciente y marca las anteriores como canceladas. Después crea la unicidad parcial de una sesión activa por usuario, índices de consulta y la unicidad de `clientMutationId` por sesión. No elimina sesiones ni series.
 

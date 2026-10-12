@@ -37,6 +37,9 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
       operation.responses['400'] ??= errorResponse('Solicitud inválida.');
       if (!publicRoute) operation.responses['401'] ??= errorResponse('Autenticación requerida.');
       operation.responses['429'] ??= errorResponse('Límite de solicitudes alcanzado.');
+      if (path !== '/api/v1/health/live') {
+        operation.responses['503'] ??= errorResponse('Protección compartida o servicio de datos temporalmente no disponible.');
+      }
       operation.responses['500'] ??= errorResponse('Error interno normalizado.');
     }
   }

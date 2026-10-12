@@ -14,6 +14,16 @@ import { WebOriginGuard } from '../modules/auth/web-origin.guard';
 let app: INestApplication;
 let document: OpenAPIObject;
 
+it.each([
+  ['/api/v1/auth/login', 'post'],
+  ['/api/v1/auth/mobile/refresh', 'post'],
+  ['/api/v1/users/me', 'patch'],
+] as const)('documents unavailable shared protection for %s', (path, method) => {
+  expect(document.paths[path][method]!.responses['503']).toMatchObject({
+    content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
+  });
+});
+
 beforeAll(async () => {
   const module = await Test.createTestingModule({
     imports: [PassportModule.register({ defaultStrategy: 'jwt' })],

@@ -4,6 +4,8 @@ import { randomBytes } from 'node:crypto';
 import request from 'supertest';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import { RateLimitStore } from '../../common/rate-limit/rate-limit.store';
+import { memoryRateLimitStore } from '../../../test/helpers/memory-rate-limit-store';
 
 describe('authentication rate limits', () => {
   let app: INestApplication;
@@ -30,6 +32,8 @@ describe('authentication rate limits', () => {
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue({})
+      .overrideProvider(RateLimitStore)
+      .useValue(memoryRateLimitStore())
       .overrideProvider(AuthService)
       .useValue({
         register: jest.fn().mockResolvedValue({

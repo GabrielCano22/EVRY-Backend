@@ -13,6 +13,12 @@ describe('compiled API performance evidence with real synthetic PostgreSQL', () 
     expect(report).toMatchObject({ fixture: { exercises: 2648, workouts: 1000, sets: 10000 },
       errors: [], application: 'compiled AppModule/configureApp; separate process', closedServers: 6 });
     expect(report.results).toHaveLength(30);
+    expect(report.quotaWaits).toHaveLength(6);
+    for (const wait of report.quotaWaits) {
+      expect(wait.elapsedMs).toBeGreaterThanOrEqual(0);
+      expect([1, 4]).toContain(wait.concurrency);
+      expect([1, 2, 3]).toContain(wait.repetition);
+    }
     for (const result of report.results) {
       expect(result).toMatchObject({ samples: 80, warmup: 20, acceptedWith95Confidence: true });
       expect(result.observationsMs).toHaveLength(80);

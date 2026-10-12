@@ -1372,6 +1372,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     webLogin: {
@@ -1435,6 +1444,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1508,6 +1526,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     webLogout: {
@@ -1574,6 +1601,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     authenticatedUser: {
@@ -1622,6 +1658,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1688,6 +1733,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     mobileLogin: {
@@ -1740,6 +1794,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1806,6 +1869,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     mobileLogout: {
@@ -1858,6 +1930,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1922,6 +2003,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1997,6 +2087,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     ExercisesController_list: {
@@ -2055,6 +2154,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2121,6 +2229,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     ExercisesController_get: {
@@ -2171,6 +2288,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2235,6 +2361,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     WorkoutsController_list: {
@@ -2286,6 +2421,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2354,6 +2498,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2434,6 +2587,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     WorkoutsController_remove: {
@@ -2503,6 +2665,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2587,6 +2758,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     WorkoutsController_finish: {
@@ -2664,6 +2844,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     WorkoutsController_cancel: {
@@ -2730,6 +2919,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2814,6 +3012,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     WorkoutsController_removeSet: {
@@ -2883,6 +3090,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2967,6 +3183,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     CycleController_list: {
@@ -3021,6 +3246,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3106,6 +3340,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     CycleController_today: {
@@ -3155,6 +3398,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3216,6 +3468,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3291,6 +3552,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     ProgressController_overview: {
@@ -3341,6 +3611,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3401,6 +3680,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3480,6 +3768,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     "ProgressController_exerciseProgress[1]": {
@@ -3552,6 +3849,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     AdaptiveController_recommend: {
@@ -3604,6 +3910,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3671,6 +3986,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     ReadinessController_latest: {
@@ -3727,6 +4051,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     RoutinesController_list: {
@@ -3775,6 +4108,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3841,6 +4183,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     RoutinesController_get: {
@@ -3898,6 +4249,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     RoutinesController_remove: {
@@ -3948,6 +4308,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4016,6 +4385,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
         };
     };
     RoutinesController_start: {
@@ -4066,6 +4444,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4248,6 +4635,15 @@ export interface operations {
             };
             /** @description Error interno normalizado. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Protección compartida o servicio de datos temporalmente no disponible. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

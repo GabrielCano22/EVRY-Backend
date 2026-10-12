@@ -7,7 +7,7 @@ import { join, relative } from 'node:path';
 import { hash } from 'bcrypt';
 import { Client } from 'pg';
 import { assertLocalMigrationDatabase } from '../test/helpers/migration-rehearsal';
-import { measureScenario, type ScenarioOptions } from '../test/helpers/api-benchmark';
+import { BenchmarkHttpStatusError, measureScenario, waitForQuotaReset, type ScenarioOptions } from '../test/helpers/api-benchmark';
 import { BenchmarkStartupError, closeBenchmarkServer, startBenchmarkServer, type BenchmarkStartupEvent } from '../test/helpers/benchmark-process';
 import type { ExercisePageDto } from '../src/modules/exercises/dto/exercise-page.dto';
 import type { ProgressOverviewDto, ExerciseProgressDto } from '../src/modules/progress/dto/progress-response.dto';
@@ -30,6 +30,7 @@ async function main() {
   const results: Array<ReturnType<typeof measureScenario> extends Promise<infer T> ? T & { name: string; repetition: number } : never> = [];
   const errors: string[] = [];
   const startupTraces: Array<{ concurrency: number; repetition: number; events: BenchmarkStartupEvent[] }> = [];
+  const quotaWaits: Array<{ concurrency: number; repetition: number; elapsedMs: number }> = [];
   let startupFailure: { code: string; closedCleanly: boolean; childExitCode: number | null; events: BenchmarkStartupEvent[] } | null = null;
   let closedServers = 0;
   let directory: string | undefined;
@@ -67,6 +68,16 @@ async function main() {
     assert.deepEqual(counts.rows[0], { exercises: 2648, workouts: 1000, sets: 10000 });
 
     for (const concurrency of [1, 4]) for (let repetition = 1; repetition <= 3; repetition++) {
+      stage = `shared quota expiry c${concurrency} r${repetition}`;
+      const waitStarted = performance.now();
+      await waitForQuotaReset(async () => {
+        const { rows } = await fixture!.query<{ waitMs: number }>(`
+          SELECT GREATEST(0, CEIL(EXTRACT(EPOCH FROM (MAX("resetAt") - clock_timestamp())) * 1000))::integer AS "waitMs"
+          FROM "RateLimitBucket"
+        `);
+        return rows[0].waitMs;
+      }, deadline);
+      quotaWaits.push({ concurrency, repetition, elapsedMs: performance.now() - waitStarted });
       stage = `application startup c${concurrency} r${repetition}`;
       const events: BenchmarkStartupEvent[] = [];
       startupTraces.push({ concurrency, repetition, events });
@@ -124,7 +135,9 @@ async function main() {
       startupFailure = { code: error.code, closedCleanly: error.closedCleanly,
         childExitCode: error.childExitCode, events: error.events };
     }
-    const failure = error instanceof BenchmarkStartupError ? error.code : error instanceof Error ? error.name : 'unknown error';
+    const failure = error instanceof BenchmarkStartupError ? error.code
+      : error instanceof BenchmarkHttpStatusError ? `HTTP_STATUS_${error.status}`
+      : error instanceof Error ? error.name : 'unknown error';
     errors.push(`Benchmark failed during ${stage} (${failure}); do not certify this run.`);
   } finally {
     // Closing resources precedes report IO; a full disk must not leave servers running.
@@ -142,7 +155,7 @@ async function main() {
     fixtureDatabase: database, fixture: { exercises: 2648, workouts: 1000, sets: 10000 },
     scope: 'Warm local synthetic application; not deployed API, cold start, Web Vitals or Android release acceptance.',
     assumptions: 'One-sided binomial order-statistic confidence bound assumes independent stationary observations. Shared resources/concurrency may violate assumptions. Each process repetition reported separately; no samples pooled. Rate limits remain enabled.',
-    errors, startupTraces, startupFailure, closedServers, results,
+    errors, startupTraces, startupFailure, closedServers, quotaWaits, results,
   }, null, 2));
   process.stdout.write(JSON.stringify({ report: relative(root, reportPath) }) + '\n');
   if (errors.length || results.length !== 30 || results.some((result) => !result.acceptedWith95Confidence)) process.exitCode = 1;

@@ -1,3 +1,28 @@
+import { setTimeout as delay } from 'node:timers/promises';
+
+export class BenchmarkHttpStatusError extends Error {
+  constructor(readonly status: number) {
+    super(`Benchmark HTTP status ${status}`);
+    this.name = 'BenchmarkHttpStatusError';
+  }
+}
+
+// Preparation outside the warm/measured requests, not a retry/discard policy.
+// Only the dedicated fixture's DB expiry determines when another trial starts.
+export async function waitForQuotaReset(readPendingMs: () => Promise<number>, deadline: number): Promise<void> {
+  while (true) {
+    if (performance.now() >= deadline) throw new Error('Benchmark quota preparation deadline exhausted');
+    const pendingMs = await readPendingMs();
+    if (!Number.isFinite(pendingMs) || pendingMs < 0) throw new Error('Invalid benchmark quota wait');
+    const remaining = deadline - performance.now();
+    if (remaining <= 0 || pendingMs >= remaining) throw new Error('Benchmark quota preparation exceeds overall deadline');
+    if (pendingMs === 0) return;
+    // Re-read the DB periodically; neither an old local clock nor a guessed TTL
+    // permits starting early or extends the original watchdog.
+    await delay(Math.min(pendingMs + 1, 1000));
+  }
+}
+
 export function summarizeLatencies(values: readonly number[], budgetMs: number) {
   if (!values.length || values.some((value) => !Number.isFinite(value) || value < 0)) {
     throw new Error('Observations must be nonempty, finite and nonnegative.');
@@ -69,7 +94,7 @@ export async function measureScenario(options: ScenarioOptions) {
           });
           if (response.status !== (options.status ?? 200)) {
             await response.body?.cancel();
-            throw new Error(`Benchmark HTTP status ${response.status}`);
+            throw new BenchmarkHttpStatusError(response.status);
           }
           const value: unknown = await response.json();
           const elapsed = performance.now() - started;
