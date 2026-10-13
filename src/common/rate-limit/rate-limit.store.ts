@@ -41,7 +41,8 @@ export class RateLimitStore {
           ELSE "RateLimitBucket"."resetAt"
         END
       RETURNING "count",
-        GREATEST(1, CEIL(EXTRACT(EPOCH FROM ("resetAt" - statement_timestamp()))))::integer AS "retryAfter"
+        -- Compute the response after any row-lock wait, not at statement arrival.
+        GREATEST(1, CEIL(EXTRACT(EPOCH FROM ("resetAt" - clock_timestamp()))))::integer AS "retryAfter"
     `;
     if (!result) throw new Error('Rate limit storage returned no quota');
     return { allowed: result.count <= options.limit, retryAfter: result.retryAfter };

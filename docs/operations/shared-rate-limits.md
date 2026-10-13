@@ -1,9 +1,17 @@
 # Límites de solicitudes compartidos
 
-Estado: pasan las 458 pruebas unitarias, 90 de integración (incluidas seis de
-cuotas compartidas) y ocho de migración poblada/recuperación. El presupuesto
-API aún está en verificación.
-No desplegado ni aceptado integralmente.
+Estado — 12 de octubre de 2026, 22:00 Bogotá: la corrección de precisión/reloj
+pasa las ocho regresiones reales de cuotas y todas las puertas locales:
+458 unitarias, 93 integraciones, nueve ensayos de migración/recuperación,
+Prisma, contrato, lint, tipos, build y auditoría de nivel alto (20 moderadas
+pendientes). `api-performance-pZmHgo` acepta los 30 grupos, con límites,
+muestras, guards y confianza originales; no sustituye CI remota ni aceptación
+integral. Su campo HEAD identifica la base, no los cambios locales sin commit.
+
+El checkpoint anterior `9b79c78` tuvo push CI verde y PR CI roja por
+Retry-After 61; esos resultados no certifican la corrección nueva.
+Se conservan los ensayos adversos `DdWdOB` y `olCW0R`, sin descartar muestras
+ni relajar presupuestos. No se ha desplegado ni modificado datos reales.
 
 ## Brecha reproducida y corrección local
 
@@ -11,7 +19,7 @@ El guard anterior guardaba cuotas en un `Map` por instancia. Reiniciar el proces
 o distribuir intentos entre dos instancias reiniciaba o multiplicaba el límite.
 La prueba inicial falló con diez intentos admitidos donde se requerían cinco.
 Después del cambio admite cinco y rechaza siete de doce intentos concurrentes.
-Los cuatro casos adicionales verifican reinicio, reloj adelantado/contador
+Los cuatro casos adicionales verifican una nueva aplicación independiente, reloj adelantado/contador
 acotado, vencimiento/conservación de cuota activa y fallo cerrado/liveness.
 Un sexto caso verifica eliminación real de una cuota vencida y conservación
 de otra activa agotada durante la limpieza.
@@ -35,6 +43,18 @@ cuotas vencidas con `SKIP LOCKED`, sin expulsar cuotas activas. El reloj de
 la aplicación solo programa esa limpieza: no determina admisión o vencimiento.
 Los intentos denegados saturan el contador en `límite + 1`, evitando crecimiento
 ilimitado. No hay fallback en memoria que permita eludir un límite agotado.
+
+Dos regresiones posteriores reprodujeron el fallo sin depender de una carrera
+aleatoria: el vencimiento de una ventana que empieza en `.000501` se redondeaba
+a milisegundos, dando 60,000499 segundos; además una actualización bloqueada
+calculaba el tiempo restante desde su llegada, no desde la respuesta posterior
+al bloqueo. Ambos casos devolvían 61. Ahora `resetAt` conserva microsegundos
+mediante una migración adicional `TIMESTAMPTZ(6)`, sin cambiar vencimientos ni
+contadores existentes, y Retry-After usa `clock_timestamp()` después de la
+espera. No se trunca el TTL, limita artificialmente el resultado, restituye una
+cuota ni amplía la aserción. Las decisiones de admisión siguen usando el reloj
+DB y el upsert atómico. [Precisión temporal](https://www.postgresql.org/docs/17/datatype-datetime.html),
+[relojes de sentencia y tiempo actual](https://www.postgresql.org/docs/17/functions-datetime.html).
 
 El error recuperable 503 del almacén está descrito en OpenAPI para las rutas
 afectadas; `/health/live` no requiere ese almacén. Los clientes se regeneran
@@ -67,6 +87,8 @@ No aplicar esta migración a datos reales ni a una base remota en esta fase.
 - Cabeceras `X-Forwarded-For` distintas no cambian la cuota sin un proxy confiable.
 - Otro cliente tiene su propia cuota, mientras reiniciar una instancia no la borra.
 - Vencimiento permite una nueva ventana y Retry-After se calcula con el reloj DB.
+- Una ventana de 60 s conserva esa duración para un inicio sub-milisegundo.
+- Retry-After excluye el tiempo pasado esperando un bloqueo real de otra conexión.
 - No hay contador creciente sin límite ni eliminación de cuotas activas al limpiar.
 - Error del almacén falla cerrado; `/health/live` conserva independencia de la DB.
 - Suite completa, contrato sin cambios inesperados, migración y presupuesto API.

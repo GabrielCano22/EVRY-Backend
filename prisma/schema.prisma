@@ -10,7 +10,7 @@ datasource db {
 model RateLimitBucket {
   key     String   @id @db.Char(64)
   count   Int
-  resetAt DateTime @db.Timestamptz(3)
+  resetAt DateTime @db.Timestamptz(6)
 
   @@index([resetAt])
 }

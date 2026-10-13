@@ -121,4 +121,53 @@ describe('shared authentication quota across independent applications', () => {
     expect(remaining).toEqual([{ key: activeKey }]);
     expect((await second.get(RateLimitStore).consume(activeIdentity, options)).allowed).toBe(false);
   });
+  it('preserves a sixty-second window at a sub-millisecond database timestamp', async () => {
+    const key = createHash('sha256').update(`precision:${randomUUID()}`).digest('hex');
+    const [stored] = await first.get(PrismaService).$queryRaw<Array<{ seconds: number; retryAfter: number }>>`
+      INSERT INTO "RateLimitBucket" ("key", "count", "resetAt")
+      VALUES (${key}, 1, TIMESTAMPTZ '2030-01-01 00:00:00.000501+00' + interval '60 seconds')
+      RETURNING EXTRACT(EPOCH FROM ("resetAt" - TIMESTAMPTZ '2030-01-01 00:00:00.000501+00'))::double precision AS "seconds",
+        CEIL(EXTRACT(EPOCH FROM ("resetAt" - TIMESTAMPTZ '2030-01-01 00:00:00.000501+00')))::integer AS "retryAfter"
+    `;
+    expect(stored).toEqual({ seconds: 60, retryAfter: 60 });
+  });
+
+  it('reports remaining quota time after a contended update, not before waiting for its lock', async () => {
+    const identity = `contended-clock:${randomUUID()}`;
+    const key = createHash('sha256').update(identity).digest('hex');
+    const options = { limit: 1, ttlMs: 60_000 };
+    const prisma = first.get(PrismaService);
+    await first.get(RateLimitStore).consume(identity, options);
+    let pending: ReturnType<RateLimitStore['consume']> | undefined;
+    try {
+      await prisma.$transaction(async tx => {
+        await tx.$executeRaw`UPDATE "RateLimitBucket" SET "count" = 1 WHERE "key" = ${key}`;
+        pending = second.get(RateLimitStore).consume(identity, options);
+        const deadline = performance.now() + 3_000;
+        let waiting = false;
+        while (performance.now() < deadline) {
+          // Activity snapshots are cached inside a transaction; observe the current lock.
+          await tx.$executeRaw`SELECT pg_stat_clear_snapshot()`;
+          const [state] = await tx.$queryRaw<Array<{ waiting: boolean }>>`
+            SELECT EXISTS (
+              SELECT 1 FROM pg_stat_activity
+              WHERE datname = current_database() AND wait_event_type = 'Lock'
+                AND query LIKE '%INSERT INTO "RateLimitBucket"%'
+                AND pid <> pg_backend_pid()
+            ) AS "waiting"
+          `;
+          if (state.waiting) { waiting = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        expect(waiting).toBe(true);
+        await tx.$executeRaw`
+          UPDATE "RateLimitBucket" SET "resetAt" = clock_timestamp() + interval '60 seconds' WHERE "key" = ${key}
+        `;
+      }, { timeout: 10_000 });
+      const result = await pending!;
+      expect(result.allowed).toBe(false);
+      expect(result.retryAfter).toBeGreaterThanOrEqual(1);
+      expect(result.retryAfter).toBeLessThanOrEqual(60);
+    } finally { await pending?.catch(() => undefined); }
+  }, 15_000);
 });
