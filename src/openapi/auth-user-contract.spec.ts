@@ -171,7 +171,7 @@ it('publishes real login, registration and mobile refresh validation constraints
     required: ['email', 'password', 'name'],
     properties: {
       email: { type: 'string', format: 'email', maxLength: 254 },
-      password: { type: 'string', minLength: 8, maxLength: 128 },
+      password: { type: 'string', minLength: 8, maxLength: 72 },
       name: { type: 'string', minLength: 2, maxLength: 100 },
       biologicalSex: { type: 'string', nullable: true, enum: ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_SAY'] },
       trackCycle: { type: 'boolean', nullable: true },

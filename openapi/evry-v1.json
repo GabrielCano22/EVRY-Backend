@@ -4501,8 +4501,9 @@
           "password": {
             "type": "string",
             "minLength": 8,
-            "maxLength": 128,
-            "writeOnly": true
+            "maxLength": 72,
+            "writeOnly": true,
+            "description": "New passwords must be valid Unicode and fit within 72 UTF-8 bytes; no truncation or normalization is applied."
           },
           "name": {
             "type": "string",

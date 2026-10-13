@@ -574,6 +574,7 @@ export interface components {
              * @description Trimmed and lowercased before registration.
              */
             email: string;
+            /** @description New passwords must be valid Unicode and fit within 72 UTF-8 bytes; no truncation or normalization is applied. */
             password: string;
             /** @description Leading and trailing whitespace is removed before validation. */
             name: string;

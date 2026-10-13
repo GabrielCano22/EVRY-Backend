@@ -180,6 +180,77 @@ describe('authentication HTTP/PostgreSQL', () => {
     if (cleanupFailure) throw cleanupFailure;
   });
 
+  it.each(['web', 'mobile'] as const)(
+    'rejects oversized or malformed %s registration passwords without creating accounts', async platform => {
+      const isolated = await createIntegrationApp();
+      try {
+        const path = platform === 'web' ? '/api/v1/auth/register' : '/api/v1/auth/mobile/register';
+        for (const [label, password] of [
+          ['ascii', 'a'.repeat(73)],
+          ['unicode', 'é'.repeat(37)],
+          ['malformed', 'valid-pass\ud800'],
+        ]) {
+          const email = `${prefix}-${platform}-rejected-${label}@example.test`;
+          const response = await request(isolated.getHttpServer()).post(path)
+            .set('Origin', allowedOrigin())
+            .send({ email, password, name: 'Password boundary' });
+          // Track an unexpectedly accepted fixture before assertions can abort
+          // the case, so the suite also cleans up regressions that create users.
+          const unexpectedUser = await prisma.user.findUnique({ where: { email } });
+          if (unexpectedUser) userIds.push(unexpectedUser.id);
+          expect(response.status).toBe(400);
+          expect(response.body).toMatchObject({
+            code: 'VALIDATION_ERROR', retryable: false,
+            requestId: expect.any(String), fieldErrors: { password: expect.any(Array) },
+          });
+          expect(response.headers['set-cookie']).toBeUndefined();
+          expect(response.body).not.toHaveProperty('accessToken');
+          expect(response.body).not.toHaveProperty('refreshToken');
+          expect(unexpectedUser).toBeNull();
+        }
+      } finally {
+        await isolated.close();
+      }
+    },
+  );
+
+  it.each(['web', 'mobile'] as const)(
+    'stores the entire 72-byte %s registration password at the UTF-8 boundary', async platform => {
+      const isolated = await createIntegrationApp();
+      try {
+        const path = platform === 'web' ? '/api/v1/auth/register' : '/api/v1/auth/mobile/register';
+        for (const [label, password] of [
+          ['ascii', 'a'.repeat(72)],
+          ['unicode', 'é'.repeat(36)],
+          ['emoji', '🙂'.repeat(18)],
+        ]) {
+          const email = `${prefix}-${platform}-boundary-${label}@example.test`;
+          const response = await request(isolated.getHttpServer()).post(path)
+            .set('Origin', allowedOrigin())
+            .send({ email, password, name: 'Password boundary' });
+          const user = await prisma.user.findUnique({ where: { email } });
+          if (user) userIds.push(user.id);
+          expect(response.status).toBe(201);
+          expect(user).not.toBeNull();
+          expect(await bcrypt.compare(password, user!.passwordHash)).toBe(true);
+          expect(await bcrypt.compare(password.slice(0, -1), user!.passwordHash)).toBe(false);
+          expect(response.body.accessToken).toEqual(expect.any(String));
+          const refresh = await prisma.refreshToken.findFirstOrThrow({ where: { userId: user!.id } });
+          expect(refresh.platform).toBe(platform === 'web' ? 'WEB' : 'MOBILE');
+          if (platform === 'web') {
+            expect(firstSetCookie(response)).toContain('HttpOnly');
+            expect(response.body).not.toHaveProperty('refreshToken');
+          } else {
+            expect(response.headers['set-cookie']).toBeUndefined();
+            expect(response.body.refreshToken).toEqual(expect.any(String));
+          }
+        }
+      } finally {
+        await isolated.close();
+      }
+    },
+  );
+
   it('rejects decoded JSON cookies through HTTP without revoking another session', async () => {
     const isolated = await createIntegrationApp();
     try {
