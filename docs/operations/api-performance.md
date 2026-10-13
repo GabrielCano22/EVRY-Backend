@@ -1,8 +1,69 @@
 # Rendimiento de la API: ensayo local reproducible
 
-Estado: la última puerta local pasa sus 30 grupos, pero se conservan dos
-ensayos adversos cuyas causas no están confirmadas. El resultado de
-publicación/CI se consulta en GitHub; no es evidencia de aceptación desplegada.
+Estado — 12 de octubre de 2026: el ensayo posterior a la optimización de
+historial, `api-performance-i1qkoC`, acepta los 30 grupos con todos los límites
+originales. Conserva 80 muestras y 20 calentamientos por grupo, seis procesos,
+seis esperas de expiración de cuotas, seis cierres limpios y cero errores.
+El ensayo adverso `api-performance-HzL1yO` sigue preservado: su historial c4/r2
+superó la cota de 500 ms. El resultado local actual no certifica CI remota,
+rendimiento desplegado, web ni Android.
+
+## Cuotas compartidas y diagnóstico — 12 de octubre de 2026
+
+El primer ensayo del nuevo almacenamiento, `api-performance-TgFFX3`, falla en
+historial c1/r2: el proceso nuevo conserva correctamente la cuota de PostgreSQL
+del proceso anterior. Se mantienen su reporte y base sintética. El runner espera
+ahora la expiración real de la cuota en la base exclusiva del ensayo antes de
+iniciar cada repetición. Las seis esperas se registran en `quotaWaits`, fuera del
+calentamiento y las muestras. No borra buckets, desactiva el guard, reintenta
+solicitudes fallidas ni descarta muestras; conserva todos los presupuestos y
+plazos originales. El ensayo posterior `HzL1yO` verifica esa preparación pero
+solo acepta 29/30 grupos: esto no demuestra cumplimiento completo de latencia.
+
+El diagnóstico separado `history-query-diagnostic-20261012.json` usa el
+repositorio compilado y transacciones de solo lectura contra el fixture fallido.
+Obtiene planes reales `EXPLAIN (ANALYZE, BUFFERS)`: métricas y récords vuelven a
+leer las mismas 10.000 series; las consultas observadas tardan 156 y 89 ms,
+respectivamente. El conteo y página de historial procesan otras 10.000 filas
+antes de devolver 1.000 sesiones/21 candidatos. Esta observación identifica
+trabajo repetido y ordenamientos a investigar; no atribuye retrospectivamente
+los outliers a una única consulta ni demuestra una optimización todavía.
+
+La siguiente modificación local cambia únicamente el conteo y la selección de
+sesiones a `EXISTS`: cada sesión se considera una vez, sin expandir sus series
+y deduplicarlas antes de paginar. Se conservan los filtros, orden por fecha/ID,
+cursor, offset y carga de series solo para la página seleccionada. Pasan las
+13 pruebas unitarias de repositorio/servicio y los 16 casos reales de progreso
+HTTP/PostgreSQL, incluidos periodos, exclusiones y cursores con fechas empatadas.
+En el diagnóstico separado posterior, el plan de página usa índices y obtiene
+21 candidatos en 0,497 ms de SQL frente a 13,374 ms en la observación anterior;
+el conteo procesa 1.000 sesiones en vez de 10.000 filas de series. Son dos
+observaciones de planes, no una comparación estadística ni aceptación HTTP.
+El reporte `history-query-exists-diagnostic-20261012.json` identifica el hash
+del repositorio compilado con cambios locales.
+
+La cadena local posterior pasa validación/generación Prisma, OpenAPI sin deriva,
+lint, tipos, build, 458 unitarias y 90 casos de integración. El primer intento de
+migración falla antes de las aserciones porque el invocador no indicó la ruta
+local de `pg_dump`; ese log y su fixture se conservan. Tras configurar
+`PG_BIN_DIRECTORY` con las herramientas 17.11 existentes en D:, los ocho casos
+completos de migración y restauración pasan, sin cambios de prueba o de plazos.
+El benchmark posterior pasa en 535,732 s:
+
+| Escenario | Máximo p95 observado, ms | Máxima cota superior 95%, ms | Presupuesto, ms |
+| --- | ---: | ---: | ---: |
+| Catálogo de 30 | 55,754 | 56,982 | <500 |
+| Overview, todo el historial | 273,577 | 290,604 | <500 |
+| Historial de ejercicio, 20 sesiones | 383,327 | 429,052 | <500 |
+| Actualizar perfil | 54,760 | 103,321 | <300 |
+| Readiness diario | 39,370 | 53,292 | <300 |
+
+Los máximos se toman entre los seis grupos independientes de cada escenario;
+no se combinan muestras. El reporte identifica HEAD `011f243`, pero midió la
+optimización SQL aún sin confirmar: no es evidencia remota del commit posterior.
+La revisión independiente comprobó la equivalencia de filtros/paginación y no
+encontró defectos en ese cambio. Este único resultado satisfactorio no establece
+una garantía de estabilidad ni explica todos los ensayos adversos anteriores.
 
 ## Diagnóstico y fallos posteriores — 9 de octubre de 2026
 
@@ -80,7 +141,9 @@ Expected: pruebas RED→GREEN, lint y tipos sin errores.
   simples de perfil/readiness, con tres repeticiones independientes de 20
   calentamientos y 80 muestras por escenario a concurrencia 1 y 4;
   comprobar valores exactos en las respuestas. Cada repetición usa un proceso
-  nuevo: las 100 solicitudes respetan el rate limit real, sin deshabilitarlo.
+  nuevo, sin reiniciar las cuotas compartidas de PostgreSQL. Antes de cada
+  repetición espera su expiración real; las 100 solicitudes por escenario
+  respetan el rate limit real, sin deshabilitarlo.
   No combinar muestras de procesos distintos para calcular confianza.
 - Guardar reporte local sin credenciales: commit, sistema, fixture, muestras,
   presupuestos, límites de confianza, errores y advertencias metodológicas.

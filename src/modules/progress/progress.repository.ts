@@ -373,20 +373,19 @@ export class ProgressRepository {
     input: ExerciseProgressRepositoryInput,
   ): Promise<ExerciseProgressRepositoryResult['history']> {
     const [countRow] = await tx.$queryRaw<CountRow[]>(Prisma.sql`
-      WITH filtered_workout AS MATERIALIZED (
-        SELECT w."id"
-        FROM "Workout" w
-        WHERE w."userId" = ${input.userId}
-          AND w."endedAt" IS NOT NULL
-          AND w."cancelledAt" IS NULL
-          ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
-      )
-      SELECT COUNT(DISTINCT w."id") AS "total"
-      FROM filtered_workout w
-      JOIN "WorkoutSet" ws ON ws."workoutId" = w."id"
-      WHERE ws."exerciseId" = ${input.exerciseId}
-        AND ws."isWarmup" = FALSE
-        AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+      SELECT COUNT(*) AS "total"
+      FROM "Workout" w
+      WHERE w."userId" = ${input.userId}
+        AND w."endedAt" IS NOT NULL
+        AND w."cancelledAt" IS NULL
+        ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
+        AND EXISTS (
+          SELECT 1 FROM "WorkoutSet" ws
+          WHERE ws."workoutId" = w."id"
+            AND ws."exerciseId" = ${input.exerciseId}
+            AND ws."isWarmup" = FALSE
+            AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+        )
     `);
     const total = Number(countRow?.total ?? 0n);
     const cursorPredicate = input.cursor
@@ -394,24 +393,23 @@ export class ProgressRepository {
       : Prisma.empty;
     const offset = input.cursor ? Prisma.empty : Prisma.sql`OFFSET ${(input.page - 1) * input.limit}`;
     const workouts = await tx.$queryRaw<HistoryWorkoutRow[]>(Prisma.sql`
-      WITH filtered_workout AS MATERIALIZED (
-        SELECT w."id", w."name", w."startedAt", w."endedAt"
-        FROM "Workout" w
-        WHERE w."userId" = ${input.userId}
-          AND w."endedAt" IS NOT NULL
-          AND w."cancelledAt" IS NULL
-          ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
-      )
-      SELECT DISTINCT
+      SELECT
         w."id" AS "workoutId",
         w."name" AS "workoutName",
         w."startedAt" AS "startedAt",
         w."endedAt" AS "endedAt"
-      FROM filtered_workout w
-      JOIN "WorkoutSet" ws ON ws."workoutId" = w."id"
-      WHERE ws."exerciseId" = ${input.exerciseId}
-        AND ws."isWarmup" = FALSE
-        AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+      FROM "Workout" w
+      WHERE w."userId" = ${input.userId}
+        AND w."endedAt" IS NOT NULL
+        AND w."cancelledAt" IS NULL
+        ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
+        AND EXISTS (
+          SELECT 1 FROM "WorkoutSet" ws
+          WHERE ws."workoutId" = w."id"
+            AND ws."exerciseId" = ${input.exerciseId}
+            AND ws."isWarmup" = FALSE
+            AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+        )
         ${cursorPredicate}
       ORDER BY w."endedAt" DESC, w."id" DESC
       LIMIT ${input.limit + 1}

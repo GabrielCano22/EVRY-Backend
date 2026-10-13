@@ -44,7 +44,7 @@ describe('shared authentication quota across independent applications', () => {
       .set('Origin', origin).send(body).expect(401);
   }, 30_000);
 
-  it('does not restore the exhausted login quota when an application restarts', async () => {
+  it('does not restore the exhausted login quota for a fresh independent application', async () => {
     const restarted = await createIntegrationApp(clientAddress);
     apps.push(restarted);
     const response = await request(restarted.getHttpServer()).post('/api/v1/auth/login')
