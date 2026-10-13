@@ -1,9 +1,11 @@
 # Preparación de staging en Vercel
 
-Estado: preparación local, **no desplegado**. La autorización de commits/pushes
-no autoriza conectar repositorios a Vercel, crear proyectos, dominios, bases,
-integraciones, importar datos ni desplegar. Render y Cloudflare quedan excluidos.
-Todos esos pasos requieren una autorización posterior específica.
+Estado: preparación local, **no desplegado**. El propietario autorizó explícitamente
+Vercel el 12 de octubre de 2026 y priorizó web, después APK; iOS queda diferido.
+El despliegue se preparará en el equipo Hobby con una base de prueba nueva y
+separada. No se importarán ni modificarán datos conservados, ni se contratarán
+planes de pago o dominios. Render y Cloudflare siguen excluidos. Esta autorización
+no demuestra que las puertas de seguridad, compatibilidad o QA estén superadas.
 
 ## Arquitectura conservada
 
@@ -24,7 +26,7 @@ la versión efectiva de compilación/runtime del proveedor antes de aprobar la
 compatibilidad, sin asumir que se conserva el mismo parche.
 [Versiones de Node.js](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions).
 
-## Configuración que deberá concretarse después de la autorización
+## Configuración que deberá concretarse antes del despliegue
 
 | Componente | Configuración |
 | --- | --- |
@@ -38,8 +40,8 @@ compatibilidad, sin asumir que se conserva el mismo parche.
 | Móvil | `EXPO_PUBLIC_API_BASE_URL`: URL de staging únicamente en un build expresamente autorizado |
 
 Preferir una ruta de API bajo el mismo origen de la web para las cookies.
-Vercel admite rewrites externos, pero la URL de destino no se inventará ni se
-activará ahora. Verificar `/api/v1`, alias temporales y `/media/exercises`,
+Vercel admite rewrites externos; la URL de destino se tomará del proyecto API
+verificado, no de un valor inventado. Verificar `/api/v1`, alias temporales y `/media/exercises`,
 Origin, `Set-Cookie`, logout y CORS con navegador real antes de adoptarlo.
 [Rewrites de Vercel](https://vercel.com/docs/routing/rewrites).
 No cambiar `SameSite=Lax`, `HttpOnly`, `Secure` de producción ni la ruta `/api`
@@ -49,7 +51,7 @@ para disimular una configuración de orígenes incorrecta.
 
 1. Todos los jobs relevantes de ambos CI y cliente OpenAPI sin diferencias;
    las auditorías y los presupuestos de rendimiento siguen siendo puertas reales.
-2. Compilación específica de Vercel tras autorizar su preparación externa:
+2. Compilación específica de Vercel:
    generar Prisma antes del build de API y comprobar inclusión de los 2.648
    archivos multimedia, atribución y rutas. No excluir los GIF para hacer caber
    un bundle; medir el artefacto efectivo contra los límites vigentes.
@@ -60,11 +62,20 @@ para disimular una configuración de orígenes incorrecta.
    de frecuencia entre instancias y detrás del proxy, no solo en un proceso local.
    La implementación local de `RateLimitStore` sustituye el `Map` por cuotas
    atómicas en PostgreSQL; dos aplicaciones locales ya comparten los cinco
-   intentos de login. Pasan las pruebas unitarias, integración y migración
-   poblada; la aceptación de rendimiento de este cambio sigue pendiente.
-   La identificación del cliente detrás del proxy de
-   Vercel sigue pendiente de validación específica antes de exposición:
-   nunca confiar indiscriminadamente en `X-Forwarded-For` del cliente.
+   intentos de login. Las pruebas locales unitarias, integración y migración
+   poblada pasan. La medición local completa del 13 de octubre aceptó los 30
+   escenarios calientes con los presupuestos originales y un 95 % de confianza;
+   no acredita latencia en Vercel ni estabilidad bajo cualquier carga.
+   La preparación de la identidad del cliente usa únicamente
+   `X-Vercel-Forwarded-For` cuando el entorno del servidor indica `VERCEL=1`.
+   Acepta una sola IP válida, normaliza IPv6 y rechaza identidades ausentes o
+   malformadas con 503; fuera de Vercel conserva la identidad del socket y no
+   confía en encabezados reenviados. No se activa `trust proxy` global.
+   Esto requiere verificación HTTPS en la plataforma antes de exposición:
+   comprobar encabezados hostiles, aislamiento entre clientes y el efecto de
+   rewrites web→API sobre la identidad. Las pruebas locales no demuestran el
+   comportamiento del ingress de Vercel.
+   [Encabezados de Vercel](https://vercel.com/docs/headers/request-headers).
 5. Ensayar backup/restauración y migración compatible sobre una copia autorizada,
    verificar conteos y estadísticas. Nunca reset, seed indiscriminado ni importar
    automáticamente cuentas de prueba en los datos conservados.

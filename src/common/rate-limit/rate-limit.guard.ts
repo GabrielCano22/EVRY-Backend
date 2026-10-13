@@ -6,6 +6,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { isIP } from 'node:net';
 import type { Request, Response } from 'express';
 import {
   RATE_LIMIT_METADATA,
@@ -15,6 +16,28 @@ import {
 import { RateLimitStore, type RateLimitResult } from './rate-limit.store';
 
 const DEFAULT_RATE_LIMIT: RateLimitOptions = { limit: 100, ttlMs: 60_000 };
+
+function clientAddress(request: Request): string {
+  // Only the server-controlled Vercel runtime flag enables platform headers.
+  // Outside that boundary, preserve Express's default refusal to trust proxies.
+  if (process.env.VERCEL !== '1') {
+    return request.ip || request.socket.remoteAddress || 'unknown';
+  }
+  // Vercel supplies this dedicated header at its ingress. Never substitute a
+  // user-supplied forwarding chain, x-real-ip, or a shared proxy socket address.
+  const address = request.headers['x-vercel-forwarded-for'];
+  if (typeof address !== 'string' || address.length > 45
+    || address.includes('%') || !isIP(address)) {
+    throw new HttpException(
+      'No pudimos verificar el límite de solicitudes. Inténtalo más tarde.',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+  }
+  // Collapse equivalent IPv6 spellings into one quota without storing raw IPs.
+  return isIP(address) === 6
+    ? new URL(`http://[${address}]`).hostname.slice(1, -1)
+    : address;
+}
 
 @Injectable()
 export class RateLimitGuard implements CanActivate {
@@ -30,7 +53,7 @@ export class RateLimitGuard implements CanActivate {
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
     const identity = JSON.stringify([
-      request.ip || request.socket.remoteAddress || 'unknown',
+      clientAddress(request),
       context.getClass().name,
       context.getHandler().name,
     ]);

@@ -52,6 +52,34 @@ describe('shared authentication quota across independent applications', () => {
     expect(response.body).toMatchObject({ code: 'RATE_LIMITED', retryable: true });
   });
 
+  it('shares a platform client quota across applications while isolating another client and preserving liveness', async () => {
+    const savedVercel = process.env.VERCEL;
+    try {
+      process.env.VERCEL = '1';
+      // Simulate the platform-provided identity only. This does not certify
+      // Vercel's ingress replacement of hostile headers or external rewrites.
+      const platformClient = peer();
+      const results = await Promise.all(Array.from({ length: 12 }, (_, index) =>
+        request((index % 2 ? first : second).getHttpServer())
+          .post('/api/v1/auth/login').set('Origin', process.env.CORS_ORIGIN!)
+          .set('X-Vercel-Forwarded-For', platformClient)
+          .set('X-Forwarded-For', `198.51.100.${index + 1}`).send(body),
+      ));
+      expect(results.filter(result => result.status === 401)).toHaveLength(5);
+      expect(results.filter(result => result.status === 429)).toHaveLength(7);
+      await request(first.getHttpServer()).post('/api/v1/auth/login')
+        .set('Origin', process.env.CORS_ORIGIN!)
+        .set('X-Vercel-Forwarded-For', peer()).send(body).expect(401);
+      const missing = await request(first.getHttpServer()).post('/api/v1/auth/login')
+        .set('Origin', process.env.CORS_ORIGIN!).send(body).expect(503);
+      expect(missing.body).toMatchObject({ code: 'SERVICE_UNAVAILABLE', retryable: true });
+      await request(first.getHttpServer()).get('/api/v1/health/live').expect(200);
+    } finally {
+      if (savedVercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = savedVercel;
+    }
+  }, 30_000);
+
   it('uses database time despite a fast application clock and bounds repeated denied attempts', async () => {
     const identity = `clock-skew:${randomUUID()}`;
     const options = { limit: 3, ttlMs: 60_000 };
