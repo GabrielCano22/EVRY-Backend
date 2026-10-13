@@ -1,5 +1,71 @@
 # Rendimiento de la API: ensayo local reproducible
 
+Última verificación local — 12 de octubre, 22:00 Bogotá:
+`api-performance-pZmHgo` acepta los 30 grupos del backend con la corrección
+de cuotas, aritmética Epley y reparación histórica. Conserva 80 muestras y
+20 calentamientos por grupo, seis procesos/cierres, seis esperas reales de
+cuotas y cero errores HTTP, sin observador ni cambios de presupuesto.
+Todas las puertas correspondientes pasan: 458 unitarias, 93 integraciones,
+nueve ensayos de migración/recuperación, estáticas y auditoría de nivel alto.
+El ensayo previo `moeY2B` también aceptó 30 grupos antes de añadir la reparación
+histórica. Ambos reportes identifican HEAD base `9b79c78`, no un fingerprint
+de todos los cambios locales. No certifican CI del nuevo commit, estabilidad
+general de latencia, API desplegada, Web Vitals ni Android. Los resultados
+adversos y diagnósticos siguientes se conservan como evidencia histórica.
+
+Actualización de CI — 12 de octubre: push de `9b79c78` pasó todas sus puertas,
+pero su PR falló en integración por Retry-After 61 bajo concurrencia. El ensayo
+local satisfactorio siguiente corresponde a ese checkpoint, no certifica aún la
+corrección posterior de precisión/reloj. La nueva ejecución local completa falla
+en rendimiento: `api-performance-DdWdOB` conserva 30 grupos, 80 muestras y 20
+calentamientos por grupo, seis cierres y seis esperas de cuotas, sin errores HTTP.
+El historial c1/r1 tiene p95 222,030 ms pero cota superior 95% 529,154 ms, mayor
+que 500; los otros 29 grupos pasan. No descartar esa observación, ampliar el
+presupuesto ni repetir sin diagnóstico. El reporte incluye HEAD `9b79c78` y
+la corrección local aún no confirmada; no certifica un nuevo commit.
+
+Diagnóstico posterior, sin cambiar consultas de producción: 80 observaciones
+del servicio compilado sobre el fixture fallido, en transacciones de solo
+lectura, localizaron medias de 34,977 ms en métricas, 51,267 en récords y
+35,822 en puntos. No reprodujeron la observación de 529,154 ms. Una aplicación
+compilada independiente, con HTTP y guards reales, sobre una copia nueva del
+fixture, tampoco la reprodujo (máximo medido 275,468 ms). Sus trazas distinguen
+tiempo de respuesta y consultas; los registros `outside-transaction-raw` pueden
+envolver la misma llamada transaccional y **no** deben sumarse dos veces.
+La base del ensayo fallido permanece intacta. Estos diagnósticos instrumentados
+no sustituyen el benchmark completo ni prueban la causa de su observación lenta.
+
+Una alternativa SQL que comparte elegibles entre métricas y récords se evaluó
+solo en un script de lectura, sin cambiar el repositorio: 30 pares alternados
+después de diez calentamientos, con igualdad exacta de métricas y récords del
+fixture, dieron medias 92,457 ms original y 81,544 ms candidato (20/30 pares
+mejores). Es evidencia exploratoria en un solo dataset, no aceptación HTTP ni
+justificación suficiente para modificar todavía la consulta. Reportes locales:
+`history-service-clock-diagnostic-20261012.json`,
+`history-http-clock-diagnostic-20261012.json` y
+`history-aggregate-paired-diagnostic-20261012.json`, dentro de `.worktrees`.
+
+El ensayo observado `api-performance-olCW0R` también falla: historial c4/r1
+tiene cota 1.087,677 ms y c4/r2 517,421 ms. Conserva 30 grupos, seis cierres,
+seis esperas y cero errores HTTP. Solo se recuperó la traza del sexto proceso:
+el proxy de aplicación Nest intercepta la asignación a `app.close`, por lo que
+el observador se corrigió para escribir en el evento de salida existente del
+worker, sin cambiar su cierre. La captura parcial no identifica causalmente
+las dos observaciones lentas ni certifica el ensayo. No descartar esos reportes.
+
+Una segunda hipótesis se comprobó en lectura: el divisor SQL `30.0` produce
+división `numeric`, mientras las estadísticas fuente usan binary64. Treinta
+pares alternados (diez calentamientos) sobre el fixture observado, sin cambiar
+los demás términos, dieron medias métricas 25,568→17,841 ms, récords
+36,516→29,040 y puntos 25,564→16,881; los treinta pares de cada consulta fueron
+más rápidos y sus filas exactamente iguales para ese dataset. Esto no prueba
+equivalencia numérica universal: una regresión HTTP/PG demostró el desacuerdo
+real de récords entre SQL y estadísticas reconstruidas para 75×10 y 60×20.
+La división double precision alinea el orden **sin redondear** con el dominio
+existente, conservando el redondeo de presentación a dos decimales. Sus 17
+pruebas de progreso pasan, pero las puertas completas y el nuevo benchmark
+sin observador siguen pendientes. No atribuirle aún aceptación HTTP.
+
 Estado — 12 de octubre de 2026: el ensayo posterior a la optimización de
 historial, `api-performance-i1qkoC`, acepta los 30 grupos con todos los límites
 originales. Conserva 80 muestras y 20 calentamientos por grupo, seis procesos,

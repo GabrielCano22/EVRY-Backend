@@ -215,6 +215,8 @@ export class ProgressRepository {
     fromInclusive: Date | null,
     toExclusive: Date,
   ): Promise<ExerciseMetricSnapshot> {
+    // Match binary64 Epley arithmetic in source statistics before rounding;
+    // a numeric divisor both costs more per row and can change raw winners.
     const [metricRow] = await tx.$queryRaw<MetricRow[]>(Prisma.sql`
       ${eligibleSetCte(userId, exerciseId, fromInclusive, toExclusive)}
       SELECT
@@ -226,7 +228,7 @@ export class ProgressRepository {
         MAX(CASE WHEN "weightKg" > 0 THEN "weightKg" END)::double precision AS "bestWeightKg",
         MAX(
           CASE WHEN "weightKg" > 0 AND "reps" > 0
-            THEN "weightKg" * (1 + "reps" / 30.0)
+            THEN "weightKg" * (1 + "reps" / 30.0::double precision)
           END
         )::double precision AS "estimated1RMKg"
       FROM eligible_set
@@ -268,10 +270,10 @@ export class ProgressRepository {
           "completedAt",
           "weightKg",
           "reps",
-          ("weightKg" * (1 + "reps" / 30.0))::double precision AS "value"
+          ("weightKg" * (1 + "reps" / 30.0::double precision))::double precision AS "value"
         FROM eligible_set
         WHERE "weightKg" > 0 AND "reps" > 0
-        ORDER BY ("weightKg" * (1 + "reps" / 30.0)) DESC, "completedAt" DESC, "setId" DESC
+        ORDER BY ("weightKg" * (1 + "reps" / 30.0::double precision)) DESC, "completedAt" DESC, "setId" DESC
         LIMIT 1
       )
     `);
@@ -325,7 +327,7 @@ export class ProgressRepository {
           MAX(CASE WHEN ws."weightKg" > 0 THEN ws."weightKg" END)::double precision AS "maxWeightKg",
           MAX(
             CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0
-              THEN ws."weightKg" * (1 + ws."reps" / 30.0)
+              THEN ws."weightKg" * (1 + ws."reps" / 30.0::double precision)
             END
           )::double precision AS "estimated1RMKg",
           COALESCE(SUM(

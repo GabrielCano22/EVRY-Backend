@@ -9,6 +9,7 @@ import { formatCivilDate } from '../src/common/dates/civil-date';
 import { PrismaConnectionExceptionFilter } from '../src/common/filters/prisma-connection-exception.filter';
 import { PrismaExceptionFilter } from '../src/common/filters/prisma-exception.filter';
 import { resolveProgressPeriod } from '../src/modules/progress/progress-period';
+import { ExerciseStatsService } from '../src/modules/workouts/exercise-stats.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 type FixtureUser = { id: string; email: string; token: string };
@@ -364,6 +365,29 @@ describe('progress HTTP/PostgreSQL', () => {
     ]);
     expect(response.body.points[0].from).toBe(response.body.points[0].to);
     expect(response.body.points[1].from).toBe(response.body.points[1].to);
+  });
+
+  it('keeps raw Epley record ordering consistent with rebuilt source statistics before rounding', async () => {
+    const actor = await createUser('epley-arithmetic');
+    const older = await createWorkout(actor, 'epley-exact', new Date('2026-01-10T12:00:00Z'), [
+      { exercise: globalExercise, values: { weightKg: 75, reps: 10 } },
+    ]);
+    await createWorkout(actor, 'epley-near', new Date('2026-01-11T12:00:00Z'), [
+      { exercise: globalExercise, values: { weightKg: 60, reps: 20 } },
+    ]);
+    // Binary64 domain arithmetic gives 100 vs 99.99999999999999. Both
+    // display as 100, but rounding must not choose the raw record winner.
+    await prisma.$transaction(tx => app.get(ExerciseStatsService).rebuildExerciseStats(tx, actor.id, [globalExercise.id]));
+    const stored = await prisma.exerciseStat.findUniqueOrThrow({
+      where: { userId_exerciseId: { userId: actor.id, exerciseId: globalExercise.id } },
+    });
+    expect(stored).toMatchObject({ estimated1RM: 100, estimated1RMWeightKg: 75, estimated1RMReps: 10 });
+    const response = await get(`/api/progress/exercise/${globalExercise.id}?period=all`, actor);
+    expect(response.status).toBe(200);
+    expect(response.body.summary.estimated1RM).toMatchObject({
+      valueKg: 100, weightKg: 75, reps: 10, workoutId: older, formula: 'EPLEY',
+    });
+    expect(response.body.points.map((point: { estimated1RMKg: number }) => point.estimated1RMKg)).toEqual([100, 100]);
   });
 
   it('bounds all-time chart data to 120 SQL-aggregated chronological points', async () => {
