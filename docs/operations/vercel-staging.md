@@ -1,11 +1,20 @@
 # Preparación de staging en Vercel
 
-Estado: preparación local, **no desplegado**. El propietario autorizó explícitamente
-Vercel el 12 de octubre de 2026 y priorizó web, después APK; iOS queda diferido.
-El despliegue se preparará en el equipo Hobby con una base de prueba nueva y
-separada. No se importarán ni modificarán datos conservados, ni se contratarán
-planes de pago o dominios. Render y Cloudflare siguen excluidos. Esta autorización
-no demuestra que las puertas de seguridad, compatibilidad o QA estén superadas.
+Estado: preparación local, **no desplegado**. La prioridad es web, después APK;
+iOS queda diferido. El historial registra una autorización para Vercel el
+12 de octubre de 2026, pero los checkpoints posteriores —el último del
+16 de octubre— prohíben desplegar o crear/modificar recursos, dominios, bases
+remotas y entornos externos sin una nueva autorización explícita posterior.
+La autorización general para continuar el desarrollo o gestionar commits,
+pushes y pull requests no levanta esa restricción.
+
+Por ahora solo se permite preparar y verificar la configuración localmente:
+no ejecutar `vercel deploy`, vincular/provisionar proyectos, crear una base
+remota ni modificar variables de entorno remotas. Un despliegue futuro autorizado
+usará Vercel y una base de prueba nueva y separada; no importará ni modificará
+automáticamente datos conservados. No se contratarán planes de pago o dominios.
+Render y Cloudflare siguen excluidos. La preparación local no acredita puertas
+de seguridad, compatibilidad o QA superadas ni autorización para exposición.
 
 ## Arquitectura conservada
 
