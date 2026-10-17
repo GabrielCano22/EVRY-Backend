@@ -86,10 +86,25 @@ describe('CycleService', () => {
 
     await expect(
       service.upsertEntry('usuario-1', { date: '2026-08-29' }, new Date('2026-08-28T15:00:00.000Z')),
-    ).rejects.toThrow('futuras');
+    ).rejects.toMatchObject({ status: 400, message: expect.stringContaining('futuras') });
     await expect(
       service.list('usuario-1', '2026-08-20', '2026-08-19', new Date('2026-08-28T15:00:00.000Z')),
-    ).rejects.toThrow('posterior');
+    ).rejects.toMatchObject({ status: 400, message: expect.stringContaining('posterior') });
+  });
+
+  it('clasifica una fecha original futura y fechas de consulta inválidas como errores de entrada', async () => {
+    const prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue({ trackCycle: true }) },
+    } as unknown as PrismaService;
+    const service = new CycleService(prisma);
+    const now = new Date('2026-08-28T15:00:00.000Z');
+    await expect(service.upsertEntry('usuario-1', {
+      date: '2026-08-20', previousDate: '2026-08-29',
+    }, now)).rejects.toMatchObject({ status: 400 });
+    await expect(service.list('usuario-1', '2026-02-30', '2026-08-28', now))
+      .rejects.toMatchObject({ status: 400 });
+    await expect(service.list('usuario-1', undefined, '2026-08-29', now))
+      .rejects.toMatchObject({ status: 400 });
   });
 
   it('elimina únicamente una entrada perteneciente al usuario', async () => {

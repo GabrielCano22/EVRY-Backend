@@ -1,8 +1,31 @@
 # Integración local con PostgreSQL sintético
 
-Actualizado: 14 de septiembre de 2026.
+Actualizado: 10 de octubre de 2026.
 
 Esta guía ejecuta las pruebas de integración contra un clúster PostgreSQL local **sintético y aislado**. Nunca copie una URL de producción ni reutilice la base de runtime. No incluye `prisma migrate reset`, `DROP DATABASE`, restauraciones ni semillas de datos reales.
+
+## Ubicación autorizada en este equipo
+
+Continuar en `D:\DatosPC\EVRY\backend`, fuera de OneDrive. Los originales de C:
+se conservan intactos y no deben usarse para instalar dependencias, generar
+Prisma, compilar o iniciar PostgreSQL. El clúster sintético copiado está en
+`D:\DatosPC\EVRY\backend\.worktrees\pg-integration-20260919`, usa sus propios
+binarios portátiles y escucha exclusivamente en `127.0.0.1:55438`.
+
+Antes de ejecutar herramientas Node/npm en este equipo:
+
+```powershell
+Set-Location 'D:\DatosPC\EVRY\backend'
+. 'D:\DatosPC\Herramientas\EVRY-Android\activate.ps1'
+node 'D:\DatosPC\Herramientas\EVRY-Android\node-on-d.mjs' --npm run prisma:validate
+```
+
+El lanzador local redirige APPDATA/LOCALAPPDATA, cachés y temporales solo para
+el proceso de la herramienta y sus hijos. La activación por sí sola no bastaba:
+Prisma en Windows prioriza APPDATA para su caché de motores. No se modifica
+el perfil de Windows, HOME, el registro ni el entorno del proceso padre.
+Los comandos npm siguientes describen las puertas; en este equipo ejecutarlos
+mediante ese lanzador. La CI de Linux mantiene sus comandos existentes.
 
 ## Prerrequisitos y barreras
 
@@ -17,8 +40,8 @@ Esta guía ejecuta las pruebas de integración contra un clúster PostgreSQL loc
 Sustituya los marcadores por rutas locales de un directorio temporal dedicado. Estos comandos no borran el directorio, sus binarios ni sus datos; no inicialice sobre un directorio que contenga datos que quiera preservar.
 
 ```powershell
-$pgBin = 'C:\ruta\a\PostgreSQL\bin'
-$pgData = 'C:\ruta\temporal\evry-contract-pgdata'
+$pgBin = 'D:\ruta\a\PostgreSQL\bin'
+$pgData = 'D:\ruta\temporal\evry-contract-pgdata'
 $pgPort = 55437
 
 # Primera vez, únicamente sobre un directorio nuevo y sintético:
@@ -36,6 +59,17 @@ Cuando termine, preserve los datos y binarios y detenga solo ese clúster tempor
 ```powershell
 & "$pgBin\pg_ctl.exe" -D $pgData -m fast -w stop
 ```
+
+Si se usa `Start-Process` en lugar de la invocación anterior, ocultar la ventana
+y esperar únicamente al controlador mediante `-PassThru` y `WaitForExit()`.
+`Start-Process -Wait` puede esperar también al servidor descendiente hasta que
+se detenga; esa espera no demuestra que el inicio haya fallado. No reiniciarlo
+por un timeout de observación. Verificar siempre proceso, puerto e identidad.
+
+Una copia detenida puede contener un PID obsoleto. No borrarlo automáticamente:
+comprobar la ausencia del proceso y del listener, conservar el archivo con otro
+nombre únicamente en la copia autorizada y dejar que PostgreSQL haga su
+recuperación normal. No reinicializar el directorio ni tocar el clúster origen.
 
 ## Configurar el entorno sintético
 

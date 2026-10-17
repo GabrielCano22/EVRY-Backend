@@ -14,6 +14,16 @@ import { WebOriginGuard } from '../modules/auth/web-origin.guard';
 let app: INestApplication;
 let document: OpenAPIObject;
 
+it.each([
+  ['/api/v1/auth/login', 'post'],
+  ['/api/v1/auth/mobile/refresh', 'post'],
+  ['/api/v1/users/me', 'patch'],
+] as const)('documents unavailable shared protection for %s', (path, method) => {
+  expect(document.paths[path][method]!.responses['503']).toMatchObject({
+    content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
+  });
+});
+
 beforeAll(async () => {
   const module = await Test.createTestingModule({
     imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
@@ -161,7 +171,7 @@ it('publishes real login, registration and mobile refresh validation constraints
     required: ['email', 'password', 'name'],
     properties: {
       email: { type: 'string', format: 'email', maxLength: 254 },
-      password: { type: 'string', minLength: 8, maxLength: 128 },
+      password: { type: 'string', minLength: 8, maxLength: 72 },
       name: { type: 'string', minLength: 2, maxLength: 100 },
       biologicalSex: { type: 'string', nullable: true, enum: ['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_SAY'] },
       trackCycle: { type: 'boolean', nullable: true },

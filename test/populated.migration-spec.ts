@@ -164,6 +164,75 @@ describe('populated migration and recovery rehearsal (synthetic local databases 
     expect(await snapshot(source, await columns(source))).toEqual(unchanged);
   });
 
+  it('repairs historical binary64 records without changing source or unrelated stats, including backup recovery and retries', async () => {
+    const baselineDirectory = join(directory, 'before-epley-migrations');
+    mkdirSync(baselineDirectory);
+    cpSync(join(root, 'prisma/migrations/migration_lock.toml'), join(baselineDirectory, 'migration_lock.toml'));
+    for (const name of migrations.filter((name) => name < '20261012030000_epley_binary64_records')) {
+      cpSync(join(root, 'prisma/migrations', name), join(baselineDirectory, name), { recursive: true });
+    }
+    const baselineConfig = join(directory, 'before-epley.config.ts');
+    writeFileSync(baselineConfig, `export default { schema: ${JSON.stringify(join(root, 'prisma/schema.prisma'))}, migrations: { path: ${JSON.stringify(baselineDirectory)} }, datasource: { url: process.env.DATABASE_URL } };\n`);
+    const fixture = await createDatabase();
+    await restore(fixture.url, legacyDump);
+    deploy(fixture.url, baselineConfig);
+    await fixture.client.query(`
+      INSERT INTO "Exercise" (id, name, "muscleGroup", equipment) VALUES
+        ('binary-near', 'Near tie', 'QUADS', 'BARBELL'),
+        ('binary-tie', 'Exact tie', 'QUADS', 'BARBELL'),
+        ('binary-duration', 'Duration only', 'CORE', 'BODYWEIGHT');
+      INSERT INTO "Workout" (id, "userId", name, status, "endedAt", "cancelledAt", "updatedAt")
+        VALUES ('binary-cancelled-workout', 'migration-user-a', 'Cancelled after completion', 'CANCELLED', '2026-08-03', '2026-08-04', '2026-08-04');
+      INSERT INTO "WorkoutSet" (id, "workoutId", "exerciseId", "order", "weightKg", reps, "isWarmup", "completedAt", "updatedAt") VALUES
+        ('binary-older', 'migration-completed-1', 'binary-near', 0, 75, 10, false, '2026-08-01 12:00', '2026-08-01'),
+        ('binary-newer', 'migration-completed-2', 'binary-near', 0, 60, 20, false, '2026-08-02 12:00', '2026-08-02'),
+        ('binary-warmup', 'migration-completed-2', 'binary-near', 1, 900, 20, true, '2026-08-02 13:00', '2026-08-02'),
+        ('binary-invalid', 'migration-completed-2', 'binary-near', 2, 900, 0, false, '2026-08-02 13:00', '2026-08-02'),
+        ('binary-active', 'migration-tied-active-z', 'binary-near', 0, 900, 20, false, '2026-08-04 13:00', '2026-08-04'),
+        ('binary-cancelled', 'binary-cancelled-workout', 'binary-near', 0, 900, 20, false, '2026-08-03 13:00', '2026-08-03'),
+        ('binary-tie-old', 'migration-completed-1', 'binary-tie', 0, 30, 30, false, '2026-08-01 12:00', '2026-08-01'),
+        ('binary-tie-a', 'migration-completed-2', 'binary-tie', 0, 45, 10, false, '2026-08-02 12:00', '2026-08-02'),
+        ('binary-tie-z', 'migration-completed-2', 'binary-tie', 1, 50, 6, false, '2026-08-02 12:00', '2026-08-02');
+      INSERT INTO "WorkoutSet" (id, "workoutId", "exerciseId", "order", "durationS", "updatedAt")
+        VALUES ('binary-duration', 'migration-completed-1', 'binary-duration', 0, 60, '2026-08-01');
+      INSERT INTO "Workout" (id, "userId", name, status, "endedAt", "updatedAt")
+        VALUES ('binary-other', 'migration-user-b', 'Other user', 'COMPLETED', '2026-08-02', '2026-08-02');
+      INSERT INTO "WorkoutSet" (id, "workoutId", "exerciseId", "order", "weightKg", reps, "completedAt", "updatedAt")
+        VALUES ('binary-other', 'binary-other', 'binary-near', 0, 1000, 30, '2026-08-02', '2026-08-02');
+      INSERT INTO "ExerciseStat" ("userId", "exerciseId", "estimated1RM", "bestWeight", "bestReps", "lastSetAt", "trendSlope", "sessionsCount", "estimated1RMAt", "estimated1RMWeightKg", "estimated1RMReps") VALUES
+        ('migration-user-a', 'binary-near', 100, 75, 20, '2026-08-02', 0.25, 2, '2026-08-02 12:00', 60, 20),
+        ('migration-user-a', 'binary-tie', 60, 50, 30, '2026-08-02', 0.5, 2, '2026-08-01 12:00', 30, 30),
+        ('migration-user-a', 'binary-duration', 999, 0, 0, '2026-08-01', 0, 1, '2026-08-01', 999, 99),
+        ('migration-user-b', 'binary-near', 2000, 1000, 30, '2026-08-02', 0, 1, '2026-08-02', 1000, 30);
+    `);
+    const preservedColumns = await columns(fixture.client);
+    preservedColumns.ExerciseStat = preservedColumns.ExerciseStat.filter((field) => !['estimated1RM', 'estimated1RMAt', 'estimated1RMWeightKg', 'estimated1RMReps'].includes(field));
+    const preserved = await snapshot(fixture.client, preservedColumns);
+    const dump = pgTool('pg_dump', fixture.url, ['--format=custom', '--no-owner', '--no-acl']);
+    writeFileSync(join(directory, 'before-epley.dump'), dump);
+    deploy(fixture.url);
+    const records = await fixture.client.query(`SELECT "userId", "exerciseId", "estimated1RM", "estimated1RMAt"::text AS at, "estimated1RMWeightKg", "estimated1RMReps" FROM "ExerciseStat" WHERE "exerciseId" LIKE 'binary-%' ORDER BY "userId", "exerciseId"`);
+    expect(records.rows).toEqual([
+      { userId: 'migration-user-a', exerciseId: 'binary-duration', estimated1RM: 0, at: null, estimated1RMWeightKg: null, estimated1RMReps: null },
+      { userId: 'migration-user-a', exerciseId: 'binary-near', estimated1RM: 100, at: '2026-08-01 12:00:00', estimated1RMWeightKg: 75, estimated1RMReps: 10 },
+      { userId: 'migration-user-a', exerciseId: 'binary-tie', estimated1RM: 60, at: '2026-08-02 12:00:00', estimated1RMWeightKg: 50, estimated1RMReps: 6 },
+      { userId: 'migration-user-b', exerciseId: 'binary-near', estimated1RM: 2000, at: '2026-08-02 00:00:00', estimated1RMWeightKg: 1000, estimated1RMReps: 30 },
+    ]);
+    expect(await snapshot(fixture.client, preservedColumns)).toEqual(preserved);
+    const canonicalColumns = await columns(fixture.client);
+    const canonical = await snapshot(fixture.client, canonicalColumns);
+    const repeatedRepair = await fixture.client.query(readFileSync(join(root, 'prisma/migrations/20261012030000_epley_binary64_records/migration.sql'), 'utf8'));
+    expect(Array.isArray(repeatedRepair) ? repeatedRepair.find((result) => result.command === 'UPDATE')?.rowCount : undefined).toBe(0);
+    expect(await snapshot(fixture.client, canonicalColumns)).toEqual(canonical);
+    deploy(fixture.url);
+    expect(await snapshot(fixture.client, canonicalColumns)).toEqual(canonical);
+    const recovered = await createDatabase();
+    await restore(recovered.url, dump);
+    expect(await snapshot(recovered.client, preservedColumns)).toEqual(preserved);
+    deploy(recovered.url);
+    expect(await snapshot(recovered.client, canonicalColumns)).toEqual(canonical);
+  }, 180_000);
+
   it('restores the pre-migration archive into a fresh database, retains every field, then successfully migrates that copy', async () => {
     const recovered = await createDatabase();
     await restore(recovered.url, legacyDump);

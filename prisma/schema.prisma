@@ -6,6 +6,15 @@ datasource db {
   provider = "postgresql"
 }
 
+// Ephemeral quotas only; no user data or raw network addresses.
+model RateLimitBucket {
+  key     String   @id @db.Char(64)
+  count   Int
+  resetAt DateTime @db.Timestamptz(6)
+
+  @@index([resetAt])
+}
+
 enum Sex {
   MALE
   FEMALE
