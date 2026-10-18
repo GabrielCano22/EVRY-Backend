@@ -19,6 +19,13 @@ SWAGGER_ENABLED=false
 
 Los secretos de acceso y refresh deben ser distintos, tener al menos 32 caracteres y no ser valores de ejemplo. El TTL de acceso es obligatorio, admite `s`, `m` o `h` y debe estar entre 60 segundos y una hora. El TTL de refresh también es obligatorio, admite únicamente días enteros (`d`) y debe estar entre 1 y 90 días. Swagger es opt-in: solo se publica en `/docs` si `SWAGGER_ENABLED=true`. `MEDIA_BASE_URL` es una opción adicional de despliegue.
 
+Para limitar el listener al PC, configure `HOST=127.0.0.1`, como en
+`.env.example`. `HOST` es opcional: al omitirlo se conserva la selección IPv6/IPv4
+y la escucha en todas las interfaces que Node utilizaba antes. Si se configura,
+debe ser una dirección IP válida (IPv4 o IPv6), sin puerto ni protocolo; un valor
+vacío o un hostname se rechaza al iniciar. Esta opción no cambia CORS, cookies,
+autenticación ni la base de datos, y no sustituye HTTPS para el APK de release.
+
 ## Instalación y scripts
 
 ```powershell

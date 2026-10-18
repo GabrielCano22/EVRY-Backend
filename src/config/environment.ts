@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 export interface RuntimeConfig {
   databaseUrl: string;
   jwtSecret: string;
@@ -64,6 +66,14 @@ function portValue(env: Record<string, unknown>): number {
   }
 
   return port;
+}
+
+function hostValue(env: Record<string, unknown>): string | undefined {
+  // Leave Node's existing IPv6/IPv4 selection intact unless explicitly set.
+  if (env.HOST === undefined) return undefined;
+  const host = requiredString(env, 'HOST');
+  if (!isIP(host)) throw new Error('HOST must be an IPv4 or IPv6 bind address.');
+  return host;
 }
 
 function jwtAccessTtl(env: Record<string, unknown>): string {
@@ -146,6 +156,7 @@ export function validateEnvironment(env: Record<string, unknown>): Record<string
     JWT_ACCESS_TTL: accessTtl,
     JWT_REFRESH_TTL: refreshTtl,
     PORT: port,
+    HOST: hostValue(env),
     CORS_ORIGIN: corsOrigin,
     SWAGGER_ENABLED: swaggerEnabled,
   };
