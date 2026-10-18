@@ -48,10 +48,12 @@ describe('benchmark HTTP boundary (real loopback server)', () => {
   let active: number;
   let peak: number;
   let quotaOpen: boolean;
+  let responseCompletedAtMs: number[];
 
   beforeEach(async () => {
     calls = active = peak = 0;
     quotaOpen = false;
+    responseCompletedAtMs = [];
     server = createServer((req, res) => {
       calls++;
       active++;
@@ -72,7 +74,10 @@ describe('benchmark HTTP boundary (real loopback server)', () => {
           // Split the response: returning at headers rather than consuming
           // the complete body must not validate this payload successfully.
           res.write('{"value":');
-          setTimeout(() => res.end('42}'), 5);
+          setTimeout(() => {
+            responseCompletedAtMs.push(Date.now());
+            res.end('42}');
+          }, 5);
         }
       }, 10);
     });
@@ -98,6 +103,19 @@ describe('benchmark HTTP boundary (real loopback server)', () => {
       observationsMs: expect.arrayContaining([expect.any(Number)]) });
     expect(calls).toBe(8);
     expect(peak).toBe(3);
+  });
+
+  it('records an absolute measured window after warmup for correlation without replacing monotonic latency observations', async () => {
+    const before = Date.now();
+    const result = await measureScenario(options());
+    const after = Date.now();
+    expect(result.measurementStartedAtMs).toBeGreaterThanOrEqual(before);
+    expect(result.measurementStartedAtMs).toBeGreaterThanOrEqual(responseCompletedAtMs[1]);
+    expect(result.measurementFinishedAtMs).toBeGreaterThanOrEqual(responseCompletedAtMs[7]);
+    expect(result.measurementFinishedAtMs).toBeGreaterThanOrEqual(result.measurementStartedAtMs);
+    expect(result.measurementFinishedAtMs).toBeLessThanOrEqual(after);
+    expect(result.observationsMs).toHaveLength(6);
+    expect(calls).toBe(8);
   });
 
   it.each(['/redirect', '/error'])('invalidates the run rather than discarding HTTP failure %s', async (path) => {

@@ -23,6 +23,9 @@ describe('compiled API performance evidence with real synthetic PostgreSQL', () 
       expect(result).toMatchObject({ samples: 80, warmup: 20, acceptedWith95Confidence: true });
       expect(result.observationsMs).toHaveLength(80);
       expect(result.confidenceCoverage).toBeGreaterThanOrEqual(.95);
+      expect(Number.isFinite(result.measurementStartedAtMs)).toBe(true);
+      expect(Number.isFinite(result.measurementFinishedAtMs)).toBe(true);
+      expect(result.measurementFinishedAtMs).toBeGreaterThanOrEqual(result.measurementStartedAtMs);
     }
   }, 23 * 60_000);
 });

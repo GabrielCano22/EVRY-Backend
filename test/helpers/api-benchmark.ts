@@ -110,9 +110,14 @@ export async function measureScenario(options: ScenarioOptions) {
     if (failure?.status === 'rejected') throw failure.reason;
   }
   await run(options.warmup, false);
+  // Wall-clock boundaries allow correlation with external database/host logs.
+  // Request latencies remain monotonic; these timestamps never affect acceptance.
+  const measurementStartedAtMs = Date.now();
   await run(options.samples, true);
+  const measurementFinishedAtMs = Date.now();
   return { ...summarizeLatencies(observationsMs, options.budgetMs),
-    warmup: options.warmup, concurrency: options.concurrency, observationsMs };
+    warmup: options.warmup, concurrency: options.concurrency, observationsMs,
+    measurementStartedAtMs, measurementFinishedAtMs };
 }
 
 export interface ScenarioOptions {
