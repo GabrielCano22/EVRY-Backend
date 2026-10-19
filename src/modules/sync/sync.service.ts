@@ -125,7 +125,7 @@ export class SyncService {
 
       for (const set of dto.sets) {
         const canonicalSet = byClientId.get(set.clientId);
-        if (canonicalSet && canonicalSet.revision !== set.baseRevision) {
+        if (canonicalSet ? canonicalSet.revision !== set.baseRevision : set.baseRevision !== 0) {
           throw new RevisionConflictException(existing);
         }
         const data = {

@@ -392,6 +392,77 @@ describe('offline workout synchronization HTTP/PostgreSQL', () => {
     }
   }, 15_000);
 
+  it('rejects a stale mobile snapshot after web deletes a synchronized set', async () => {
+    const user = await createUser('web-deleted-set');
+    const exercise = await createExercise('web-deleted-set');
+    const payload = activePayload(exercise.id);
+    const initial = await sync(user, payload);
+    expect(initial.status).toBe(201);
+    const workoutId = initial.body.workout.id as string;
+    const removed = await request(app.getHttpServer())
+      .delete(`/api/v1/workouts/sets/${initial.body.workout.sets[0].id}`)
+      .set('Authorization', `Bearer ${user.token}`);
+    expect(removed.status).toBe(200);
+
+    const stale = await sync(user, {
+      ...payload, syncId: randomUUID(), baseRevision: 1,
+      sets: [{ ...payload.sets[0], baseRevision: 1 }],
+    });
+    expect(stale.status).toBe(409);
+    expect(stale.body).toMatchObject({
+      code: 'REVISION_CONFLICT',
+      serverVersion: { id: workoutId, revision: 2, sets: [] },
+    });
+    await expect(prisma.workoutSet.count({ where: { workoutId } })).resolves.toBe(0);
+  });
+
+  it('rejects a missing nonzero-revision set even with the current parent revision', async () => {
+    const user = await createUser('missing-revised-set');
+    const exercise = await createExercise('missing-revised-set');
+    const payload = activePayload(exercise.id, { sets: [] });
+    const initial = await sync(user, payload);
+    expect(initial.status).toBe(201);
+    const workoutId = initial.body.workout.id as string;
+    const stale = await sync(user, {
+      ...payload, syncId: randomUUID(), baseRevision: 1,
+      sets: [{ clientId: randomUUID(), baseRevision: 1, exerciseId: exercise.id, order: 0, reps: 5 }],
+    });
+    expect(stale.status).toBe(409);
+    expect(stale.body).toMatchObject({
+      code: 'REVISION_CONFLICT', serverVersion: { id: workoutId, revision: 1, sets: [] },
+    });
+    await expect(prisma.workout.findUniqueOrThrow({ where: { id: workoutId } }))
+      .resolves.toMatchObject({ revision: 1, lastSyncId: payload.syncId });
+    await expect(prisma.workoutSet.count({ where: { workoutId } })).resolves.toBe(0);
+  });
+
+  it('advances the parent revision for web set writes but not an idempotent add replay', async () => {
+    const user = await createUser('web-set-revisions');
+    const exercise = await createExercise('web-set-revisions');
+    const initial = await sync(user, activePayload(exercise.id, { sets: [] }));
+    expect(initial.status).toBe(201);
+    const workoutId = initial.body.workout.id as string;
+    const body = { clientMutationId: randomUUID(), exerciseId: exercise.id, order: 0, reps: 5 };
+    const add = () => request(app.getHttpServer())
+      .post(`/api/v1/workouts/${workoutId}/sets`)
+      .set('Authorization', `Bearer ${user.token}`).send(body);
+    const created = await add();
+    expect(created.status).toBe(201);
+    await expect(prisma.workout.findUniqueOrThrow({ where: { id: workoutId } }))
+      .resolves.toMatchObject({ revision: 2 });
+    const replay = await add();
+    expect(replay.status).toBe(201);
+    expect(replay.body.id).toBe(created.body.id);
+    await expect(prisma.workout.findUniqueOrThrow({ where: { id: workoutId } }))
+      .resolves.toMatchObject({ revision: 2 });
+    const updated = await request(app.getHttpServer())
+      .patch(`/api/v1/workouts/sets/${created.body.id}`)
+      .set('Authorization', `Bearer ${user.token}`).send({ reps: 8 });
+    expect(updated.status).toBe(200);
+    await expect(prisma.workout.findUniqueOrThrow({ where: { id: workoutId } }))
+      .resolves.toMatchObject({ revision: 3 });
+  });
+
   it('rejects a second active offline session instead of mixing it with the existing one', async () => {
     const user = await createUser('different-active');
     const exercise = await createExercise('different-active');
@@ -412,6 +483,55 @@ describe('offline workout synchronization HTTP/PostgreSQL', () => {
     await expect(prisma.workout.findUnique({
       where: { userId_clientId: { userId: user.id, clientId: payload.clientId } },
     })).resolves.toBeNull();
+  });
+
+  it('adopts an owned web workout with stable UUIDs and completes its original rows through sync', async () => {
+    const user = await createUser('adopt-web');
+    const stranger = await createUser('adopt-stranger');
+    const exercise = await createExercise('adopt-web');
+    const created = await request(app.getHttpServer()).post('/api/v1/workouts')
+      .set('Authorization', `Bearer ${user.token}`).send({ name: 'Web original' });
+    expect(created.status).toBe(201);
+    const workoutId = created.body.id as string;
+    const set = await request(app.getHttpServer()).post(`/api/v1/workouts/${workoutId}/sets`)
+      .set('Authorization', `Bearer ${user.token}`)
+      .send({ clientMutationId: randomUUID(), exerciseId: exercise.id, order: 0, reps: 5, weightKg: 40 });
+    expect(set.status).toBe(201);
+    const before = await prisma.workout.findUniqueOrThrow({ where: { id: workoutId }, include: { sets: true } });
+    const adopt = (actor: FixtureUser) => request(app.getHttpServer())
+      .post(`/api/v1/workouts/${workoutId}/adopt`)
+      .set('Authorization', `Bearer ${actor.token}`).send({});
+
+    expect((await adopt(stranger)).status).toBe(403);
+    await expect(prisma.workout.findUniqueOrThrow({ where: { id: workoutId }, include: { sets: true } }))
+      .resolves.toEqual(before);
+    const adopted = await adopt(user);
+    expect(adopted.status).toBe(201);
+    const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(adopted.body).toMatchObject({ id: workoutId, name: 'Web original', status: 'ACTIVE' });
+    expect(adopted.body.clientId).toMatch(uuidV4);
+    expect(adopted.body.sets).toHaveLength(1);
+    expect(adopted.body.sets[0]).toMatchObject({ id: set.body.id, exerciseId: exercise.id, reps: 5, weightKg: 40 });
+    expect(adopted.body.sets[0].clientId).toMatch(uuidV4);
+    const repeated = await adopt(user);
+    expect(repeated.status).toBe(201);
+    expect(repeated.body).toEqual(adopted.body);
+
+    const completed = await sync(user, {
+      clientId: adopted.body.clientId, syncId: randomUUID(), baseRevision: adopted.body.revision,
+      name: adopted.body.name, startedAt: adopted.body.startedAt, status: WorkoutStatus.COMPLETED,
+      sets: [{ clientId: adopted.body.sets[0].clientId, baseRevision: adopted.body.sets[0].revision,
+        exerciseId: exercise.id, order: 0, reps: 8, weightKg: 40 }],
+      deletedSetClientIds: [],
+    });
+    expect(completed.status).toBe(201);
+    expect(completed.body.workout).toMatchObject({ id: workoutId, status: 'COMPLETED', sets: [{ id: set.body.id, reps: 8 }] });
+    await expect(prisma.workout.count({ where: { userId: user.id } })).resolves.toBe(1);
+    await expect(prisma.workoutSet.count({ where: { workoutId } })).resolves.toBe(1);
+    await expect(prisma.exerciseStat.findUniqueOrThrow({
+      where: { userId_exerciseId: { userId: user.id, exerciseId: exercise.id } },
+    })).resolves.toMatchObject({ sessionsCount: 1, bestReps: 8, bestWeight: 40 });
+    expect((await adopt(user)).status).toBe(400);
   });
 
   it('updates, deletes and reorders existing sets as one active synchronization', async () => {
