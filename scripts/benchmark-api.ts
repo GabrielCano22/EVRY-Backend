@@ -8,7 +8,7 @@ import { hash } from 'bcrypt';
 import { Client } from 'pg';
 import { assertLocalMigrationDatabase } from '../test/helpers/migration-rehearsal';
 import { BenchmarkHttpStatusError, measureScenario, waitForQuotaReset, type ScenarioOptions } from '../test/helpers/api-benchmark';
-import { BenchmarkStartupError, closeBenchmarkServer, startBenchmarkServer, type BenchmarkStartupEvent } from '../test/helpers/benchmark-process';
+import { benchmarkPreparationTimeoutMs, BenchmarkStartupError, closeBenchmarkServer, startBenchmarkServer, type BenchmarkStartupEvent } from '../test/helpers/benchmark-process';
 import type { ExercisePageDto } from '../src/modules/exercises/dto/exercise-page.dto';
 import type { ProgressOverviewDto, ExerciseProgressDto } from '../src/modules/progress/dto/progress-response.dto';
 
@@ -155,6 +155,7 @@ async function main() {
     fixtureDatabase: database, fixture: { exercises: 2648, workouts: 1000, sets: 10000 },
     scope: 'Warm local synthetic application; not deployed API, cold start, Web Vitals or Android release acceptance.',
     assumptions: 'One-sided binomial order-statistic confidence bound assumes independent stationary observations. Shared resources/concurrency may violate assumptions. Each process repetition reported separately; no samples pooled. Rate limits remain enabled.',
+    startupPreparationTimeoutMs: benchmarkPreparationTimeoutMs(),
     errors, startupTraces, startupFailure, closedServers, quotaWaits, results,
   }, null, 2));
   process.stdout.write(JSON.stringify({ report: relative(root, reportPath) }) + '\n');

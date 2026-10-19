@@ -25,6 +25,16 @@ calcula la puntuación desde esos valores combinados. Un bloqueo transaccional
 por usuario y fecha serializa la creación y las actualizaciones parciales.
 Estos cambios no requieren migraciones nuevas ni modifican sesiones históricas.
 
+El ensayo de rendimiento usa el mismo margen de preparación del backend ya
+autorizado para Windows local: 120 segundos para importar/iniciar su proceso de
+fixture. CI (también Windows) y otros sistemas conservan 30 segundos. El plazo
+global, los cierres, cuotas, calentamiento, muestras, intervalos de confianza y
+presupuestos HTTP de 300/500 ms no cambian. Cada informe registra
+`startupPreparationTimeoutMs`; un fallo previo de importación se conserva y no
+se interpreta como una medición de latencia. Las pruebas usan un hijo IPC real
+y reloj de espera controlado para aceptar 81/119,999 s únicamente en Windows
+local y rechazar el exceso de cada límite, sin esperas reales de dos minutos.
+
 Esta guía ejecuta las pruebas de integración contra un clúster PostgreSQL local **sintético y aislado**. Nunca copie una URL de producción ni reutilice la base de runtime. No incluye `prisma migrate reset`, `DROP DATABASE`, restauraciones ni semillas de datos reales.
 
 ## Ubicación autorizada en este equipo

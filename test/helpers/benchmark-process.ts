@@ -2,6 +2,14 @@ import { fork, type ChildProcess, type ForkOptions } from 'node:child_process';
 import { join } from 'node:path';
 
 export interface BenchmarkStartupEvent { phase: string; elapsedMs: number }
+interface BenchmarkStartupContext { platform: string; ci: string | undefined }
+
+// Fixture module loading is outside every warmed request/performance budget.
+export function benchmarkPreparationTimeoutMs(
+  context: BenchmarkStartupContext = { platform: process.platform, ci: process.env.CI },
+): number {
+  return context.platform === 'win32' && !context.ci ? 120_000 : 30_000;
+}
 
 type StartupFailureCode = 'DEADLINE_EXHAUSTED' | 'STARTUP_TIMEOUT' | 'EXITED_BEFORE_READY' | 'INITIALIZATION_REJECTED' | 'SPAWN_FAILED';
 const workerPhases = new Set(['IMPORTS_STARTED', 'IMPORTS_READY', 'APP_CREATED', 'LISTENING']);
@@ -17,6 +25,7 @@ export class BenchmarkStartupError extends Error {
 export async function startBenchmarkServer(options: {
   root: string; databaseUrl: string; deadline: number;
   onPhase?: (event: BenchmarkStartupEvent) => void;
+  startupContext?: BenchmarkStartupContext;
 }): Promise<{ child: ChildProcess; baseUrl: string }> {
   const { root, databaseUrl, deadline } = options;
   if (performance.now() >= deadline) throw new BenchmarkStartupError('DEADLINE_EXHAUSTED', []);
@@ -63,8 +72,9 @@ export async function startBenchmarkServer(options: {
           resolve(packet.ready);
         } else if (packet.error) fail('INITIALIZATION_REJECTED');
       };
-      // Phase/unknown packets never clear or extend this existing watchdog.
-      const timer = setTimeout(() => fail('STARTUP_TIMEOUT'), Math.min(30_000, deadline - performance.now()));
+      // Phase packets never extend preparation or the stricter overall deadline.
+      const timer = setTimeout(() => fail('STARTUP_TIMEOUT'),
+        Math.min(benchmarkPreparationTimeoutMs(options.startupContext), deadline - performance.now()));
       child.once('exit', exit);
       child.once('error', spawnError);
       child.on('message', message);
