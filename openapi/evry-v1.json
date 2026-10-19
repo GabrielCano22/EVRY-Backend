@@ -7029,27 +7029,27 @@
         "properties": {
           "sleepHrs": {
             "type": "number",
+            "nullable": true,
             "minimum": 0,
-            "maximum": 16,
-            "nullable": true
+            "maximum": 16
           },
           "stress": {
             "type": "integer",
+            "nullable": true,
             "minimum": 1,
-            "maximum": 5,
-            "nullable": true
+            "maximum": 5
           },
           "soreness": {
             "type": "integer",
+            "nullable": true,
             "minimum": 1,
-            "maximum": 5,
-            "nullable": true
+            "maximum": 5
           },
           "motivation": {
             "type": "integer",
+            "nullable": true,
             "minimum": 1,
-            "maximum": 5,
-            "nullable": true
+            "maximum": 5
           }
         }
       },

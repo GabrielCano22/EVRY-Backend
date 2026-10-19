@@ -3,10 +3,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { todayCivilDate } from '../../common/dates/civil-date';
 
 export interface CheckinDto {
-  sleepHrs?: number;
-  stress?: number;
-  soreness?: number;
-  motivation?: number;
+  sleepHrs?: number | null;
+  stress?: number | null;
+  soreness?: number | null;
+  motivation?: number | null;
 }
 
 @Injectable()
@@ -22,10 +22,10 @@ export class ReadinessService {
       const where = { userId_civilDate: { userId, civilDate } };
       const previous = await tx.readiness.findUnique({ where });
       const inputs: CheckinDto = {
-        sleepHrs: dto.sleepHrs ?? previous?.sleepHrs ?? undefined,
-        stress: dto.stress ?? previous?.stress ?? undefined,
-        soreness: dto.soreness ?? previous?.soreness ?? undefined,
-        motivation: dto.motivation ?? previous?.motivation ?? undefined,
+        sleepHrs: dto.sleepHrs === undefined ? previous?.sleepHrs : dto.sleepHrs,
+        stress: dto.stress === undefined ? previous?.stress : dto.stress,
+        soreness: dto.soreness === undefined ? previous?.soreness : dto.soreness,
+        motivation: dto.motivation === undefined ? previous?.motivation : dto.motivation,
       };
       const score = this.score(inputs);
       return tx.readiness.upsert({

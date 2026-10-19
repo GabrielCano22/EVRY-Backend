@@ -4,16 +4,16 @@ import { IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
 @ApiSchema({ name: 'ReadinessInput' })
 export class CheckinReadinessDto {
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 0, maximum: 16 })
-  @IsOptional() @IsNumber() @Min(0) @Max(16) sleepHrs?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(16) sleepHrs?: number | null;
 
   @ApiPropertyOptional({ type: 'integer', nullable: true, minimum: 1, maximum: 5 })
-  @IsOptional() @IsInt() @Min(1) @Max(5) stress?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(5) stress?: number | null;
 
   @ApiPropertyOptional({ type: 'integer', nullable: true, minimum: 1, maximum: 5 })
-  @IsOptional() @IsInt() @Min(1) @Max(5) soreness?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(5) soreness?: number | null;
 
   @ApiPropertyOptional({ type: 'integer', nullable: true, minimum: 1, maximum: 5 })
-  @IsOptional() @IsInt() @Min(1) @Max(5) motivation?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(5) motivation?: number | null;
 }
 
 @ApiSchema({ name: 'Readiness' })

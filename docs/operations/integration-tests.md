@@ -19,7 +19,8 @@ instantánea móvil anterior recibe `409 REVISION_CONFLICT` con la versión
 canónica, y una serie inexistente con revisión previa distinta de cero no puede
 recrearse mediante sincronización.
 
-Readiness conserva los campos omitidos al actualizar el mismo día civil y
+Readiness conserva los campos omitidos al actualizar el mismo día civil,
+permite borrar respuestas explícitamente con `null`, y
 calcula la puntuación desde esos valores combinados. Un bloqueo transaccional
 por usuario y fecha serializa la creación y las actualizaciones parciales.
 Estos cambios no requieren migraciones nuevas ni modifican sesiones históricas.

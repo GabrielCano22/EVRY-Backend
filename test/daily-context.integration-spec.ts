@@ -65,4 +65,17 @@ describe('daily context HTTP/PostgreSQL', () => {
     expect(latest.body).toEqual(updated.body);
     expect(await prisma.readiness.count({ where: { userId } })).toBe(1);
   });
+
+  it('clears explicit null readiness answers while preserving the canonical daily row', async () => {
+    const save = (body: Record<string, number | null>) => request(app.getHttpServer()).post('/api/v1/readiness/checkin')
+      .set('Authorization', `Bearer ${token}`).send(body).expect(201);
+    const first = await save({ sleepHrs: 8, stress: 1, soreness: 1, motivation: 5 });
+    expect(first.body.score).toBe(100);
+    const cleared = await save({ sleepHrs: null, stress: null, soreness: null, motivation: null });
+    expect(cleared.body).toMatchObject({
+      id: first.body.id, sleepHrs: null, stress: null, soreness: null, motivation: null, score: 70,
+    });
+    await expect(prisma.readiness.findUniqueOrThrow({ where: { id: first.body.id } }))
+      .resolves.toMatchObject({ sleepHrs: null, stress: null, soreness: null, motivation: null, score: 70 });
+  });
 });
