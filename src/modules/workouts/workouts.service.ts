@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { uniqueConflictTargets } from '../../prisma/unique-conflict';
 import { findVisibleExerciseOrThrow } from '../exercises/exercise-visibility';
@@ -59,6 +60,34 @@ export class WorkoutsService {
       include: workoutDetailInclude,
     });
     return this.requireOwnedWorkout(userId, workout);
+  }
+
+  adopt(userId: string, id: string) {
+    return runWorkoutTransaction(this.prisma, async (tx) => {
+      await lockWorkoutLifecycle(tx, userId);
+      const workout = this.requireOwnedWorkout(
+        userId,
+        await tx.workout.findUnique({ where: { id }, include: workoutDetailInclude }),
+      );
+      this.assertMutable(workout);
+      const unidentifiedSets = workout.sets.filter((set) => !set.clientId);
+      if (workout.clientId && unidentifiedSets.length === 0) return workout;
+
+      for (const set of unidentifiedSets) {
+        await tx.workoutSet.update({
+          where: { id: set.id },
+          data: { clientId: randomUUID(), revision: { increment: 1 } },
+        });
+      }
+      return tx.workout.update({
+        where: { id },
+        data: {
+          clientId: workout.clientId ?? randomUUID(),
+          revision: { increment: 1 },
+        },
+        include: workoutDetailInclude,
+      });
+    });
   }
 
   update(userId: string, id: string, dto: UpdateWorkoutDto) {
@@ -182,10 +211,15 @@ export class WorkoutsService {
         });
         if (existing) return existing;
 
-        return tx.workoutSet.create({
+        const created = await tx.workoutSet.create({
           data: { workoutId, ...dto },
           include: { exercise: true },
         });
+        await tx.workout.update({
+          where: { id: workoutId },
+          data: { revision: { increment: 1 } },
+        });
+        return created;
       });
     } catch (error) {
       if (!isSetMutationConflict(error)) throw error;
@@ -213,6 +247,10 @@ export class WorkoutsService {
       if (!set) throw new NotFoundException();
       const workout = this.requireOwnedWorkout(userId, set.workout);
       this.assertMutable(workout);
+      await tx.workout.update({
+        where: { id: set.workoutId },
+        data: { revision: { increment: 1 } },
+      });
       return tx.workoutSet.update({
         where: { id: setId },
         data: { ...dto, revision: { increment: 1 } },
@@ -232,6 +270,10 @@ export class WorkoutsService {
       const workout = this.requireOwnedWorkout(userId, set.workout);
       this.assertMutable(workout);
       await tx.workoutSet.delete({ where: { id: setId } });
+      await tx.workout.update({
+        where: { id: set.workoutId },
+        data: { revision: { increment: 1 } },
+      });
       return { ok: true };
     });
   }

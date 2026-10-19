@@ -13,6 +13,22 @@ const validEnvironment = () => ({
 });
 
 describe('validateEnvironment', () => {
+  it('preserves the operating system bind selection when HOST is not configured', () => {
+    expect(validateEnvironment(validEnvironment()).HOST).toBeUndefined();
+  });
+
+  it.each(['127.0.0.1', '0.0.0.0', '::1', '::'])(
+    'accepts explicit IP binding %s without resolving a remote hostname', (host) => {
+      expect(validateEnvironment({ ...validEnvironment(), HOST: ` ${host} ` }).HOST).toBe(host);
+    },
+  );
+
+  it.each(['', ' ', 'localhost', 'https://127.0.0.1', '127.0.0.1:4000', '256.0.0.1', 123, null])(
+    'rejects invalid explicit HOST %s', (host) => {
+      expect(() => validateEnvironment({ ...validEnvironment(), HOST: host })).toThrow('HOST');
+    },
+  );
+
   it('rechaza una configuración sin secretos JWT', () => {
     const environment: Record<string, unknown> = validEnvironment();
     delete environment.JWT_ACCESS_SECRET;

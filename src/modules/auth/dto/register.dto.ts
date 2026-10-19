@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString, MinLength, IsOptional, IsEnum, IsBoolean, MaxLength } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional, IsEnum, IsBoolean, MaxLength, ValidateBy } from 'class-validator';
 import { Sex } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional, ApiSchema } from '@nestjs/swagger';
 
@@ -11,10 +11,22 @@ export class RegisterDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   email!: string;
 
-  @ApiProperty({ type: String, minLength: 8, maxLength: 128, writeOnly: true })
+  @ApiProperty({ type: String, minLength: 8, maxLength: 72, writeOnly: true,
+    description: 'New passwords must be valid Unicode and fit within 72 UTF-8 bytes; no truncation or normalization is applied.' })
   @IsString()
   @MinLength(8)
-  @MaxLength(128)
+  @MaxLength(72)
+  @ValidateBy({
+    name: 'bcryptUtf8Password',
+    validator: {
+      validate(value: unknown): boolean {
+        if (typeof value !== 'string' || Buffer.byteLength(value, 'utf8') > 72) return false;
+        // Avoid encodeURI-based byte validators throwing on malformed UTF-16.
+        return Buffer.from(value, 'utf8').toString('utf8') === value;
+      },
+      defaultMessage: () => '$property debe ser Unicode válido y no superar 72 bytes UTF-8.',
+    },
+  })
   password!: string;
 
   @ApiProperty({ type: String, minLength: 2, maxLength: 100, description: 'Leading and trailing whitespace is removed before validation.' })

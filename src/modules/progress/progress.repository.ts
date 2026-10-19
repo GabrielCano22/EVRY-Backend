@@ -215,6 +215,8 @@ export class ProgressRepository {
     fromInclusive: Date | null,
     toExclusive: Date,
   ): Promise<ExerciseMetricSnapshot> {
+    // Match binary64 Epley arithmetic in source statistics before rounding;
+    // a numeric divisor both costs more per row and can change raw winners.
     const [metricRow] = await tx.$queryRaw<MetricRow[]>(Prisma.sql`
       ${eligibleSetCte(userId, exerciseId, fromInclusive, toExclusive)}
       SELECT
@@ -226,7 +228,7 @@ export class ProgressRepository {
         MAX(CASE WHEN "weightKg" > 0 THEN "weightKg" END)::double precision AS "bestWeightKg",
         MAX(
           CASE WHEN "weightKg" > 0 AND "reps" > 0
-            THEN "weightKg" * (1 + "reps" / 30.0)
+            THEN "weightKg" * (1 + "reps" / 30.0::double precision)
           END
         )::double precision AS "estimated1RMKg"
       FROM eligible_set
@@ -268,10 +270,10 @@ export class ProgressRepository {
           "completedAt",
           "weightKg",
           "reps",
-          ("weightKg" * (1 + "reps" / 30.0))::double precision AS "value"
+          ("weightKg" * (1 + "reps" / 30.0::double precision))::double precision AS "value"
         FROM eligible_set
         WHERE "weightKg" > 0 AND "reps" > 0
-        ORDER BY ("weightKg" * (1 + "reps" / 30.0)) DESC, "completedAt" DESC, "setId" DESC
+        ORDER BY ("weightKg" * (1 + "reps" / 30.0::double precision)) DESC, "completedAt" DESC, "setId" DESC
         LIMIT 1
       )
     `);
@@ -325,7 +327,7 @@ export class ProgressRepository {
           MAX(CASE WHEN ws."weightKg" > 0 THEN ws."weightKg" END)::double precision AS "maxWeightKg",
           MAX(
             CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0
-              THEN ws."weightKg" * (1 + ws."reps" / 30.0)
+              THEN ws."weightKg" * (1 + ws."reps" / 30.0::double precision)
             END
           )::double precision AS "estimated1RMKg",
           COALESCE(SUM(
@@ -373,20 +375,19 @@ export class ProgressRepository {
     input: ExerciseProgressRepositoryInput,
   ): Promise<ExerciseProgressRepositoryResult['history']> {
     const [countRow] = await tx.$queryRaw<CountRow[]>(Prisma.sql`
-      WITH filtered_workout AS MATERIALIZED (
-        SELECT w."id"
-        FROM "Workout" w
-        WHERE w."userId" = ${input.userId}
-          AND w."endedAt" IS NOT NULL
-          AND w."cancelledAt" IS NULL
-          ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
-      )
-      SELECT COUNT(DISTINCT w."id") AS "total"
-      FROM filtered_workout w
-      JOIN "WorkoutSet" ws ON ws."workoutId" = w."id"
-      WHERE ws."exerciseId" = ${input.exerciseId}
-        AND ws."isWarmup" = FALSE
-        AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+      SELECT COUNT(*) AS "total"
+      FROM "Workout" w
+      WHERE w."userId" = ${input.userId}
+        AND w."endedAt" IS NOT NULL
+        AND w."cancelledAt" IS NULL
+        ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
+        AND EXISTS (
+          SELECT 1 FROM "WorkoutSet" ws
+          WHERE ws."workoutId" = w."id"
+            AND ws."exerciseId" = ${input.exerciseId}
+            AND ws."isWarmup" = FALSE
+            AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+        )
     `);
     const total = Number(countRow?.total ?? 0n);
     const cursorPredicate = input.cursor
@@ -394,24 +395,23 @@ export class ProgressRepository {
       : Prisma.empty;
     const offset = input.cursor ? Prisma.empty : Prisma.sql`OFFSET ${(input.page - 1) * input.limit}`;
     const workouts = await tx.$queryRaw<HistoryWorkoutRow[]>(Prisma.sql`
-      WITH filtered_workout AS MATERIALIZED (
-        SELECT w."id", w."name", w."startedAt", w."endedAt"
-        FROM "Workout" w
-        WHERE w."userId" = ${input.userId}
-          AND w."endedAt" IS NOT NULL
-          AND w."cancelledAt" IS NULL
-          ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
-      )
-      SELECT DISTINCT
+      SELECT
         w."id" AS "workoutId",
         w."name" AS "workoutName",
         w."startedAt" AS "startedAt",
         w."endedAt" AS "endedAt"
-      FROM filtered_workout w
-      JOIN "WorkoutSet" ws ON ws."workoutId" = w."id"
-      WHERE ws."exerciseId" = ${input.exerciseId}
-        AND ws."isWarmup" = FALSE
-        AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+      FROM "Workout" w
+      WHERE w."userId" = ${input.userId}
+        AND w."endedAt" IS NOT NULL
+        AND w."cancelledAt" IS NULL
+        ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
+        AND EXISTS (
+          SELECT 1 FROM "WorkoutSet" ws
+          WHERE ws."workoutId" = w."id"
+            AND ws."exerciseId" = ${input.exerciseId}
+            AND ws."isWarmup" = FALSE
+            AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
+        )
         ${cursorPredicate}
       ORDER BY w."endedAt" DESC, w."id" DESC
       LIMIT ${input.limit + 1}

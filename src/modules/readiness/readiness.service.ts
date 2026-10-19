@@ -3,10 +3,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { todayCivilDate } from '../../common/dates/civil-date';
 
 export interface CheckinDto {
-  sleepHrs?: number;
-  stress?: number;
-  soreness?: number;
-  motivation?: number;
+  sleepHrs?: number | null;
+  stress?: number | null;
+  soreness?: number | null;
+  motivation?: number | null;
 }
 
 @Injectable()
@@ -14,12 +14,25 @@ export class ReadinessService {
   constructor(private prisma: PrismaService) {}
 
   async checkin(userId: string, dto: CheckinDto, now: Date = new Date()) {
-    const score = this.score(dto);
     const civilDate = this.databaseCivilDate(now);
-    return this.prisma.readiness.upsert({
-      where: { userId_civilDate: { userId, civilDate } },
-      create: { userId, civilDate, ...dto, score },
-      update: { ...dto, score },
+    return this.prisma.$transaction(async (tx) => {
+      // Serialize first creation as well as partial updates for this civil day.
+      const lock = `evry:readiness:${userId}:${civilDate.toISOString()}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lock}, 0))`;
+      const where = { userId_civilDate: { userId, civilDate } };
+      const previous = await tx.readiness.findUnique({ where });
+      const inputs: CheckinDto = {
+        sleepHrs: dto.sleepHrs === undefined ? previous?.sleepHrs : dto.sleepHrs,
+        stress: dto.stress === undefined ? previous?.stress : dto.stress,
+        soreness: dto.soreness === undefined ? previous?.soreness : dto.soreness,
+        motivation: dto.motivation === undefined ? previous?.motivation : dto.motivation,
+      };
+      const score = this.score(inputs);
+      return tx.readiness.upsert({
+        where,
+        create: { userId, civilDate, ...inputs, score },
+        update: { ...inputs, score },
+      });
     });
   }
 

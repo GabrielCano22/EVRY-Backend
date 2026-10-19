@@ -1,5 +1,11 @@
 import { createServer, type Server } from 'node:http';
 import { measureScenario, summarizeLatencies } from './helpers/api-benchmark';
+import * as benchmark from './helpers/api-benchmark';
+
+// No-op is the current runner's behavior before quota-aware preparation exists.
+const waitForQuotaReset = (benchmark as unknown as {
+  waitForQuotaReset?: (readPendingMs: () => Promise<number>, deadline: number) => Promise<void>;
+}).waitForQuotaReset ?? (async () => {});
 
 describe('benchmark statistical evidence', () => {
   it('keeps nearest-rank tail spikes and does not mutate observations', () => {
@@ -41,9 +47,13 @@ describe('benchmark HTTP boundary (real loopback server)', () => {
   let calls: number;
   let active: number;
   let peak: number;
+  let quotaOpen: boolean;
+  let responseCompletedAtMs: number[];
 
   beforeEach(async () => {
     calls = active = peak = 0;
+    quotaOpen = false;
+    responseCompletedAtMs = [];
     server = createServer((req, res) => {
       calls++;
       active++;
@@ -53,6 +63,8 @@ describe('benchmark HTTP boundary (real loopback server)', () => {
         if (req.url === '/redirect') {
           res.writeHead(302, { location: 'https://example.com/' });
           res.end();
+        } else if (req.url === '/quota-error' || (req.url === '/quota' && !quotaOpen)) {
+          res.writeHead(429); res.end('{"sensitive":"do-not-report"}');
         } else if (req.url === '/error') {
           res.writeHead(503); res.end('{"unavailable":true}');
         } else if (req.url === '/invalid') {
@@ -62,7 +74,10 @@ describe('benchmark HTTP boundary (real loopback server)', () => {
           // Split the response: returning at headers rather than consuming
           // the complete body must not validate this payload successfully.
           res.write('{"value":');
-          setTimeout(() => res.end('42}'), 5);
+          setTimeout(() => {
+            responseCompletedAtMs.push(Date.now());
+            res.end('42}');
+          }, 5);
         }
       }, 10);
     });
@@ -90,8 +105,49 @@ describe('benchmark HTTP boundary (real loopback server)', () => {
     expect(peak).toBe(3);
   });
 
+  it('records an absolute measured window after warmup for correlation without replacing monotonic latency observations', async () => {
+    const before = Date.now();
+    const result = await measureScenario(options());
+    const after = Date.now();
+    expect(result.measurementStartedAtMs).toBeGreaterThanOrEqual(before);
+    expect(result.measurementStartedAtMs).toBeGreaterThanOrEqual(responseCompletedAtMs[1]);
+    expect(result.measurementFinishedAtMs).toBeGreaterThanOrEqual(responseCompletedAtMs[7]);
+    expect(result.measurementFinishedAtMs).toBeGreaterThanOrEqual(result.measurementStartedAtMs);
+    expect(result.measurementFinishedAtMs).toBeLessThanOrEqual(after);
+    expect(result.observationsMs).toHaveLength(6);
+    expect(calls).toBe(8);
+  });
+
   it.each(['/redirect', '/error'])('invalidates the run rather than discarding HTTP failure %s', async (path) => {
     await expect(measureScenario(options(path))).rejects.toThrow(/HTTP status (302|503)/);
+  });
+
+  it('retains a bounded HTTP status rather than only a generic error or sensitive body', async () => {
+    await expect(measureScenario(options('/quota-error'))).rejects.toMatchObject({
+      name: 'BenchmarkHttpStatusError', status: 429, message: 'Benchmark HTTP status 429',
+    });
+  });
+
+  it('waits for a pending external quota before collecting every successful warming and measured response', async () => {
+    let pending = true;
+    await waitForQuotaReset(async () => {
+      if (pending) { pending = false; return 20; }
+      quotaOpen = true;
+      return 0;
+    }, performance.now() + 1000);
+    const result = await measureScenario(options('/quota'));
+    expect(result).toMatchObject({ samples: 6, warmup: 2 });
+    expect(calls).toBe(8);
+  });
+
+  it('rejects quota preparation past the overall deadline rather than extending the watchdog', async () => {
+    await expect(waitForQuotaReset(async () => 1000, performance.now() + 20)).rejects.toThrow(/deadline/i);
+    expect(calls).toBe(0);
+  });
+
+  it.each([NaN, Infinity, -1])('rejects invalid external quota wait %s', async wait => {
+    await expect(waitForQuotaReset(async () => wait, performance.now() + 1000)).rejects.toThrow(/quota/i);
+    expect(calls).toBe(0);
   });
 
   it('invalidates a body that cannot be parsed as JSON', async () => {

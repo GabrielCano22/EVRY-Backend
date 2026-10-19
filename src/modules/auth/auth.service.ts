@@ -53,8 +53,8 @@ export class AuthService {
     return this.issueTokens(user.id, user.email, platform);
   }
 
-  async refresh(refreshToken?: string, platform: RefreshTokenPlatform = 'WEB') {
-    if (!refreshToken?.trim()) {
+  async refresh(refreshToken?: unknown, platform: RefreshTokenPlatform = 'WEB') {
+    if (typeof refreshToken !== 'string' || !refreshToken.trim()) {
       throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
     }
 
@@ -100,9 +100,12 @@ export class AuthService {
   }
 
   async logout(
-    refreshToken: string,
+    refreshToken: unknown,
     platform: RefreshTokenPlatform = 'WEB',
   ) {
+    if (typeof refreshToken !== 'string') {
+      throw new UnauthorizedException('El token de sesión no es válido o ya expiró.');
+    }
     const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
     const record = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },

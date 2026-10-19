@@ -35,6 +35,14 @@ export class WorkoutsController {
     return this.svc.get(u.id, id);
   }
 
+  @Post(':id/adopt')
+  @ApiCreatedResponse({ type: WorkoutDto, description: 'Identidades UUID persistentes para continuar la sesión activa desde otro cliente. Repetir no cambia las identidades ni las revisiones.' })
+  @ApiNotFoundResponse({ schema: { $ref: '#/components/schemas/ApiError' } })
+  @ApiForbiddenResponse({ schema: { $ref: '#/components/schemas/ApiError' } })
+  adopt(@CurrentUser() u: AuthUser, @Param('id') id: string) {
+    return this.svc.adopt(u.id, id);
+  }
+
   @Patch(':id')
   @ApiOkResponse({ type: WorkoutDto })
   @ApiNotFoundResponse({ schema: { $ref: '#/components/schemas/ApiError' } })
