@@ -1,6 +1,28 @@
 # Integración local con PostgreSQL sintético
 
-Actualizado: 10 de octubre de 2026.
+Actualizado: 19 de octubre de 2026.
+
+## Recuperación de sesiones entre web y móvil
+
+`POST /api/v1/workouts/:id/adopt` prepara una sesión **activa y propia** para
+continuarla en otro cliente. Asigna UUID persistentes únicamente a la sesión o
+series que todavía no los tienen, dentro de la misma transacción y bloqueo de
+ciclo de vida. Conserva los IDs de servidor, contenidos y UUID existentes.
+Incrementa las revisiones afectadas al asignar identidades; repetir la solicitud
+no las cambia. Rechaza sesiones históricas y sesiones ajenas. No mezcla datos de
+la sesión local rechazada: el cliente debe pedir la adopción antes de sustituir
+su copia, y conservarla si falla la petición.
+
+Las mutaciones REST efectivas de series también incrementan la revisión de su
+sesión. Repetir un alta con el mismo `clientMutationId` no la incrementa. Una
+instantánea móvil anterior recibe `409 REVISION_CONFLICT` con la versión
+canónica, y una serie inexistente con revisión previa distinta de cero no puede
+recrearse mediante sincronización.
+
+Readiness conserva los campos omitidos al actualizar el mismo día civil y
+calcula la puntuación desde esos valores combinados. Un bloqueo transaccional
+por usuario y fecha serializa la creación y las actualizaciones parciales.
+Estos cambios no requieren migraciones nuevas ni modifican sesiones históricas.
 
 Esta guía ejecuta las pruebas de integración contra un clúster PostgreSQL local **sintético y aislado**. Nunca copie una URL de producción ni reutilice la base de runtime. No incluye `prisma migrate reset`, `DROP DATABASE`, restauraciones ni semillas de datos reales.
 

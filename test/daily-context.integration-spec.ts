@@ -50,4 +50,19 @@ describe('daily context HTTP/PostgreSQL', () => {
     expect(latest.body).toEqual(updated.body);
     expect(await prisma.readiness.count({ where: { userId } })).toBe(1);
   });
+
+  it('scores partial readiness updates from the actual preserved daily inputs', async () => {
+    const save = (body: Record<string, number>) => request(app.getHttpServer()).post('/api/v1/readiness/checkin')
+      .set('Authorization', `Bearer ${token}`).send(body).expect(201);
+    const first = await save({ sleepHrs: 0, stress: 5, soreness: 5, motivation: 1 });
+    expect(first.body.score).toBe(0);
+    const updated = await save({ motivation: 5 });
+    expect(updated.body).toMatchObject({
+      id: first.body.id, sleepHrs: 0, stress: 5, soreness: 5, motivation: 5, score: 20,
+    });
+    const latest = await request(app.getHttpServer()).get('/api/v1/readiness/latest')
+      .set('Authorization', `Bearer ${token}`).expect(200);
+    expect(latest.body).toEqual(updated.body);
+    expect(await prisma.readiness.count({ where: { userId } })).toBe(1);
+  });
 });
