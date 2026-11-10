@@ -57,6 +57,7 @@ describe('exercise catalog mapping', () => {
 
     expect(input).toMatchObject({
       sourceId: '0001',
+      name: 'Abdominal 3/4',
       muscleGroup: MuscleGroup.CORE,
       equipment: Equipment.BODYWEIGHT,
       imagePath: 'images/0001-2gPfomN.jpg',
