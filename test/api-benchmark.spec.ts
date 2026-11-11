@@ -42,6 +42,12 @@ describe('benchmark statistical evidence', () => {
 });
 
 describe('benchmark HTTP boundary (real loopback server)', () => {
+  // Requests are held until the expected overlap exists instead of relying on a
+  // 10 ms window: a saturated machine can delay the remaining connections past
+  // that window and make an honestly concurrent client look serial. The barrier
+  // still fails the assertion when the client really cannot hold them together.
+  const CONCURRENCY_BARRIER_WINDOW_MS = 1_000;
+
   let server: Server;
   let baseUrl: string;
   let calls: number;
@@ -49,16 +55,25 @@ describe('benchmark HTTP boundary (real loopback server)', () => {
   let peak: number;
   let quotaOpen: boolean;
   let responseCompletedAtMs: number[];
+  let concurrencyBarrier: number;
 
   beforeEach(async () => {
     calls = active = peak = 0;
     quotaOpen = false;
     responseCompletedAtMs = [];
+    concurrencyBarrier = 0;
+    const awaitConcurrentRequests = async () => {
+      if (concurrencyBarrier <= 1) return;
+      const arrivedAt = Date.now();
+      while (active < concurrencyBarrier && Date.now() - arrivedAt < CONCURRENCY_BARRIER_WINDOW_MS) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    };
     server = createServer((req, res) => {
       calls++;
       active++;
       peak = Math.max(peak, active);
-      setTimeout(() => {
+      void awaitConcurrentRequests().then(() => setTimeout(() => {
         active--;
         if (req.url === '/redirect') {
           res.writeHead(302, { location: 'https://example.com/' });
@@ -79,7 +94,7 @@ describe('benchmark HTTP boundary (real loopback server)', () => {
             res.end('42}');
           }, 5);
         }
-      }, 10);
+      }, 10));
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const address = server.address();
@@ -98,6 +113,7 @@ describe('benchmark HTTP boundary (real loopback server)', () => {
   }
 
   it('excludes warming requests, consumes bodies and actually runs concurrent requests', async () => {
+    concurrencyBarrier = 3;
     const result = await measureScenario(options());
     expect(result).toMatchObject({ samples: 6, warmup: 2, concurrency: 3,
       observationsMs: expect.arrayContaining([expect.any(Number)]) });
