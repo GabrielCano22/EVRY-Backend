@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -11,6 +12,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, ApiSchema } from '@nestjs/swagger';
+import { SetType } from '../set-type';
 
 @ApiSchema({ name: 'CreateWorkoutInput' })
 export class CreateWorkoutDto {
@@ -52,6 +54,8 @@ export class CreateSetDto {
   @ValidateIf((_object, value) => value !== undefined) @IsInt() @Min(1) @Max(10) rpe?: number;
   @ApiPropertyOptional({ type: Boolean })
   @ValidateIf((_object, value) => value !== undefined) @IsBoolean() isWarmup?: boolean;
+  @ApiPropertyOptional({ enum: SetType })
+  @ValidateIf((_object, value) => value !== undefined) @IsEnum(SetType) setType?: SetType;
   @ApiProperty({ type: String, format: 'uuid' })
   @IsUUID('4') clientMutationId!: string;
   @ApiPropertyOptional({ type: Boolean })
@@ -72,4 +76,6 @@ export class UpdateSetDto {
   @IsOptional() @IsBoolean() techniqueStable?: boolean | null;
   @ApiPropertyOptional({ type: Boolean })
   @ValidateIf((_object, value) => value !== undefined) @IsBoolean() isWarmup?: boolean;
+  @ApiPropertyOptional({ enum: SetType })
+  @ValidateIf((_object, value) => value !== undefined) @IsEnum(SetType) setType?: SetType;
 }

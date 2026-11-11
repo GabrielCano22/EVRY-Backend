@@ -58,7 +58,7 @@ export interface ExerciseMetricSet {
   muscleGroup: MuscleGroup;
   endedAt: Date | null;
   cancelledAt: Date | null;
-  completedAt: Date;
+  completedAt: Date | null;
   isWarmup: boolean;
   weightKg: number | null;
   reps: number | null;

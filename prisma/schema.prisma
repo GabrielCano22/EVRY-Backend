@@ -234,7 +234,9 @@ model WorkoutSet {
   durationS        Int?
   rpe              Int?
   isWarmup         Boolean  @default(false)
-  completedAt      DateTime @default(now())
+  setType          String   @default("NORMAL")
+  /// Null until the lifter ticks the set. Historical rows keep their value.
+  completedAt      DateTime?
   clientMutationId String?
   clientId         String?  @db.Uuid
   revision         Int      @default(1)

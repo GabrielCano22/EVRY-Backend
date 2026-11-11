@@ -82,6 +82,8 @@ it('publishes detailed workouts and sets without inventing serialized exercise m
       exercise: { $ref: '#/components/schemas/ExerciseEntity' },
       weightKg: { type: 'number', nullable: true },
       reps: { type: 'integer', nullable: true },
+      setType: { type: 'string', enum: ['WARMUP', 'NORMAL', 'FAILURE', 'DROP'] },
+      completedAt: { type: 'string', nullable: true, format: 'date-time' },
       clientMutationId: { type: 'string', nullable: true },
       techniqueStable: { type: 'boolean', nullable: true },
     },
@@ -140,6 +142,7 @@ it('describes sync limits, nullable inputs, mapping and canonical conflict paylo
     weightKg: { type: 'number', nullable: true, minimum: 0, maximum: 2000 },
     reps: { type: 'integer', nullable: true, minimum: 0, maximum: 1000 },
     durationS: { type: 'integer', nullable: true, minimum: 0, maximum: 86400 },
+    setType: { type: 'string', enum: ['WARMUP', 'NORMAL', 'FAILURE', 'DROP'] },
     completedAt: { type: 'string', nullable: true, format: 'date-time' },
   } });
   expect(schema('SyncWorkoutResult')).toMatchObject({ required: ['workout', 'revision', 'mapping'], properties: {

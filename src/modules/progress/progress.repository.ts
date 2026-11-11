@@ -183,6 +183,7 @@ function eligibleSetCte(
       JOIN filtered_workout w ON w."id" = ws."workoutId"
       WHERE ws."exerciseId" = ${exerciseId}
         AND ws."isWarmup" = FALSE
+        AND ws."completedAt" IS NOT NULL
         AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
     )`;
 }
@@ -341,6 +342,7 @@ export class ProgressRepository {
           ${rangeSql(input.period.fromInclusive, input.period.toExclusive)}
           AND ws."exerciseId" = ${input.exerciseId}
           AND ws."isWarmup" = FALSE
+          AND ws."completedAt" IS NOT NULL
           AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
         GROUP BY w."id", w."endedAt"
       ), bucketed AS MATERIALIZED (
@@ -386,6 +388,7 @@ export class ProgressRepository {
           WHERE ws."workoutId" = w."id"
             AND ws."exerciseId" = ${input.exerciseId}
             AND ws."isWarmup" = FALSE
+            AND ws."completedAt" IS NOT NULL
             AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
         )
     `);
@@ -410,6 +413,7 @@ export class ProgressRepository {
           WHERE ws."workoutId" = w."id"
             AND ws."exerciseId" = ${input.exerciseId}
             AND ws."isWarmup" = FALSE
+            AND ws."completedAt" IS NOT NULL
             AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
         )
         ${cursorPredicate}
@@ -441,6 +445,7 @@ export class ProgressRepository {
       WHERE ws."workoutId" IN (${Prisma.join(workoutIds)})
         AND ws."exerciseId" = ${input.exerciseId}
         AND ws."isWarmup" = FALSE
+        AND ws."completedAt" IS NOT NULL
         AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
       ORDER BY ws."workoutId" ASC, ws."order" ASC, ws."completedAt" ASC, ws."id" ASC
     `);
@@ -519,6 +524,7 @@ export class ProgressRepository {
         FROM "WorkoutSet" ws
         JOIN completed_workout w ON w."id" = ws."workoutId"
         WHERE ws."isWarmup" = FALSE
+          AND ws."completedAt" IS NOT NULL
           AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
       )
       SELECT
@@ -611,6 +617,7 @@ export class ProgressRepository {
       JOIN filtered_workout w ON w."id" = ws."workoutId"
       JOIN "Exercise" e ON e."id" = ws."exerciseId"
       WHERE ws."isWarmup" = FALSE
+        AND ws."completedAt" IS NOT NULL
         AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
       GROUP BY e."muscleGroup"
       ORDER BY COUNT(*) DESC, e."muscleGroup" ASC
@@ -667,7 +674,8 @@ export class ProgressRepository {
         COUNT(ws."id") AS "setCount",
         COALESCE(SUM(
           CASE
-            WHEN ws."isWarmup" = FALSE AND ws."weightKg" > 0 AND ws."reps" > 0
+            WHEN ws."isWarmup" = FALSE AND ws."completedAt" IS NOT NULL
+              AND ws."weightKg" > 0 AND ws."reps" > 0
               THEN ws."weightKg" * ws."reps"
             ELSE 0
           END
@@ -722,7 +730,8 @@ export class ProgressRepository {
         w."name" AS "name",
         w."endedAt" AS "endedAt",
         w."cyclePhase" AS "cyclePhase",
-        (SELECT COUNT(*) FROM "WorkoutSet" ws_count WHERE ws_count."workoutId" = w."id") AS "setCount",
+        (SELECT COUNT(*) FROM "WorkoutSet" ws_count
+          WHERE ws_count."workoutId" = w."id" AND ws_count."completedAt" IS NOT NULL) AS "setCount",
         COALESCE(SUM(
           CASE WHEN ws."weightKg" > 0 AND ws."reps" > 0 THEN ws."weightKg" * ws."reps" ELSE 0 END
         ), 0)::double precision AS "volumeKg"
@@ -730,6 +739,7 @@ export class ProgressRepository {
       LEFT JOIN "WorkoutSet" ws
         ON ws."workoutId" = w."id"
         AND ws."isWarmup" = FALSE
+        AND ws."completedAt" IS NOT NULL
         AND (COALESCE(ws."reps", 0) > 0 OR COALESCE(ws."durationS", 0) > 0)
       WHERE w."userId" = ${userId}
         AND w."endedAt" IS NOT NULL

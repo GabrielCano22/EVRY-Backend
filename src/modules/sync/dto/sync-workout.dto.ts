@@ -18,6 +18,7 @@ import {
 } from 'class-validator';
 import { WorkoutStatus } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional, ApiSchema } from '@nestjs/swagger';
+import { SetType } from '../../workouts/set-type';
 
 @ApiSchema({ name: 'SyncWorkoutSetInput' })
 export class SyncWorkoutSetDto {
@@ -39,10 +40,12 @@ export class SyncWorkoutSetDto {
   @IsOptional() @IsInt() @Min(1) @Max(10) rpe?: number | null;
   @ApiPropertyOptional({ type: Boolean })
   @IsOptional() @IsBoolean() isWarmup?: boolean;
+  @ApiPropertyOptional({ enum: SetType })
+  @IsOptional() @IsEnum(SetType) setType?: SetType;
   @ApiPropertyOptional({ type: Boolean, nullable: true })
   @IsOptional() @IsBoolean() techniqueStable?: boolean | null;
   @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true })
-  @IsOptional() @IsDateString() completedAt?: string;
+  @IsOptional() @IsDateString() completedAt?: string | null;
 }
 
 @ApiSchema({ name: 'SyncWorkoutInput' })

@@ -150,6 +150,7 @@ describe('ExerciseStatsService', () => {
       where: {
         exerciseId: { in: ['exercise-stale'] },
         isWarmup: false,
+        completedAt: { not: null },
         OR: [{ reps: { gt: 0 } }, { durationS: { gt: 0 } }],
         workout: { userId: 'user-1', endedAt: { not: null }, cancelledAt: null },
       },

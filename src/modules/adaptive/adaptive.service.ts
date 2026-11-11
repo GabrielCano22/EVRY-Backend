@@ -25,6 +25,7 @@ export class AdaptiveService {
       where: {
         exerciseId,
         isWarmup: false,
+        completedAt: { not: null },
         workout: { userId, status: 'COMPLETED' },
         weightKg: { gt: 0 },
         reps: { gt: 0 },

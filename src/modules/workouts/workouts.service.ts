@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { uniqueConflictTargets } from '../../prisma/unique-conflict';
@@ -16,6 +17,7 @@ import {
   UpdateWorkoutDto,
 } from './dto/workout.dto';
 import { ExerciseStatsService } from './exercise-stats.service';
+import { isWarmupSetType, resolveSetType } from './set-type';
 import {
   ServicioSesionActiva,
   workoutDetailInclude,
@@ -211,8 +213,10 @@ export class WorkoutsService {
         });
         if (existing) return existing;
 
+        const { setType: requestedSetType, isWarmup, ...rest } = dto;
+        const setType = resolveSetType(requestedSetType, isWarmup);
         const created = await tx.workoutSet.create({
-          data: { workoutId, ...dto },
+          data: { workoutId, ...rest, setType, isWarmup: isWarmupSetType(setType) },
           include: { exercise: true },
         });
         await tx.workout.update({
@@ -251,9 +255,16 @@ export class WorkoutsService {
         where: { id: set.workoutId },
         data: { revision: { increment: 1 } },
       });
+      const { setType: requestedSetType, isWarmup, ...rest } = dto;
+      const data: Prisma.WorkoutSetUpdateInput = { ...rest, revision: { increment: 1 } };
+      if (requestedSetType !== undefined || isWarmup !== undefined) {
+        const setType = resolveSetType(requestedSetType, isWarmup);
+        data.setType = setType;
+        data.isWarmup = isWarmupSetType(setType);
+      }
       return tx.workoutSet.update({
         where: { id: setId },
-        data: { ...dto, revision: { increment: 1 } },
+        data,
         include: { exercise: true },
       });
     });

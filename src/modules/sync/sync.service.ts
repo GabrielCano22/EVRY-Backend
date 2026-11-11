@@ -7,6 +7,7 @@ import {
   lockWorkoutLifecycle,
   runWorkoutTransaction,
 } from '../workouts/workout-transaction';
+import { isWarmupSetType, resolveSetType } from '../workouts/set-type';
 import { SyncWorkoutDto } from './dto/sync-workout.dto';
 import { RevisionConflictException } from './revision-conflict.exception';
 
@@ -128,6 +129,7 @@ export class SyncService {
         if (canonicalSet ? canonicalSet.revision !== set.baseRevision : set.baseRevision !== 0) {
           throw new RevisionConflictException(existing);
         }
+        const setType = resolveSetType(set.setType, set.isWarmup);
         const data = {
           exerciseId: set.exerciseId,
           order: set.order,
@@ -135,9 +137,12 @@ export class SyncService {
           reps: set.reps,
           durationS: set.durationS,
           rpe: set.rpe,
-          isWarmup: set.isWarmup,
+          isWarmup: isWarmupSetType(setType),
+          setType,
           techniqueStable: set.techniqueStable,
-          completedAt: set.completedAt ? new Date(set.completedAt) : undefined,
+          ...(set.completedAt === undefined
+            ? {}
+            : { completedAt: set.completedAt ? new Date(set.completedAt) : null }),
         };
         if (canonicalSet) {
           await tx.workoutSet.update({
@@ -160,6 +165,7 @@ export class SyncService {
       const usefulSets = await tx.workoutSet.findMany({
         where: {
           workoutId,
+          completedAt: { not: null },
           OR: [{ reps: { gt: 0 } }, { durationS: { gt: 0 } }],
         },
         select: { exerciseId: true },

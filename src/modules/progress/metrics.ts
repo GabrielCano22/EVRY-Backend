@@ -10,24 +10,27 @@ export function roundMetric(value: number): number {
   return Number(value.toFixed(2));
 }
 
-function isEligible(row: ExerciseMetricSet, userId: string): row is ExerciseMetricSet & { endedAt: Date } {
+type EligibleMetricSet = ExerciseMetricSet & { endedAt: Date; completedAt: Date };
+
+function isEligible(row: ExerciseMetricSet, userId: string): row is EligibleMetricSet {
   return row.userId === userId
     && row.endedAt !== null
     && row.cancelledAt === null
+    && row.completedAt !== null
     && !row.isWarmup
     && ((row.reps ?? 0) > 0 || (row.durationS ?? 0) > 0);
 }
 
-function isNewer(left: ExerciseMetricSet, right: ExerciseMetricSet): boolean {
+function isNewer(left: EligibleMetricSet, right: EligibleMetricSet): boolean {
   const timeDifference = left.completedAt.getTime() - right.completedAt.getTime();
   return timeDifference > 0 || (timeDifference === 0 && left.setId > right.setId);
 }
 
 function selectRecord(
-  rows: ExerciseMetricSet[],
-  value: (row: ExerciseMetricSet) => number | null,
-): ExerciseMetricSet | null {
-  let selected: ExerciseMetricSet | null = null;
+  rows: EligibleMetricSet[],
+  value: (row: EligibleMetricSet) => number | null,
+): EligibleMetricSet | null {
+  let selected: EligibleMetricSet | null = null;
   let selectedValue: number | null = null;
   for (const row of rows) {
     const currentValue = value(row);
@@ -45,7 +48,7 @@ function selectRecord(
   return selected;
 }
 
-function epley(row: ExerciseMetricSet): number | null {
+function epley(row: EligibleMetricSet): number | null {
   if ((row.weightKg ?? 0) <= 0 || (row.reps ?? 0) <= 0) return null;
   return (row.weightKg as number) * (1 + (row.reps as number) / 30);
 }

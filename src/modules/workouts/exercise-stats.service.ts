@@ -57,6 +57,7 @@ export class ExerciseStatsService {
       where: {
         exerciseId: { in: affectedExerciseIds },
         isWarmup: false,
+        completedAt: { not: null },
         OR: [{ reps: { gt: 0 } }, { durationS: { gt: 0 } }],
         workout: { userId, endedAt: { not: null }, cancelledAt: null },
       },
@@ -73,8 +74,9 @@ export class ExerciseStatsService {
 
     const byExercise = new Map<string, EligibleSet[]>();
     for (const set of sets) {
+      if (set.completedAt === null) continue;
       const exerciseSets = byExercise.get(set.exerciseId) ?? [];
-      exerciseSets.push(set);
+      exerciseSets.push({ ...set, completedAt: set.completedAt });
       byExercise.set(set.exerciseId, exerciseSets);
     }
 

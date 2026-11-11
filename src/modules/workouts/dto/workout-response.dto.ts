@@ -2,6 +2,7 @@ import { ApiProperty, ApiSchema } from '@nestjs/swagger';
 import { CyclePhase, WorkoutStatus } from '@prisma/client';
 import { ExerciseEntityDto } from '../../exercises/dto/exercise-page.dto';
 import { RoutineDto } from '../../routines/dto/routine-response.dto';
+import { SetType } from '../set-type';
 
 /** Scalar Prisma workout fields; relation shapes vary by endpoint. */
 @ApiSchema({ name: 'WorkoutEntity' })
@@ -34,7 +35,8 @@ export class WorkoutSetDto {
   @ApiProperty({ type: 'integer', nullable: true }) durationS!: number | null;
   @ApiProperty({ type: 'integer', nullable: true }) rpe!: number | null;
   @ApiProperty({ type: Boolean }) isWarmup!: boolean;
-  @ApiProperty({ type: String, format: 'date-time' }) completedAt!: string;
+  @ApiProperty({ enum: SetType }) setType!: SetType;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true }) completedAt!: string | null;
   @ApiProperty({ type: String, nullable: true }) clientMutationId!: string | null;
   @ApiProperty({ type: String, format: 'uuid', nullable: true }) clientId!: string | null;
   @ApiProperty({ type: 'integer' }) revision!: number;
